@@ -1,4 +1,4 @@
-# Copilot Instructions
+﻿# Copilot Instructions
 
 Chat-miniprojekt, obligatorisk studieaktivitet. Mål er ikke kun at få det til at virke, alle gruppemedlemmer skal kunne forklare protokollen, trådmodellen, de delte ressourcer og håndteringen af klientafbrydelser.
 
@@ -14,34 +14,34 @@ java -cp out ChatServer
 java -cp out ChatClient
 ```
 
+(Opdatér hvis I ender med Maven.)
+
 ## Arkitektur
 
 Foreslået klassestruktur, følg medmindre I har en god grund til at afvige:
 
-- `ChatServer`, starter serveren, accepterer forbindelser, bruger `ExecutorService`
-- `ClientHandler`, håndterer kommunikationen med én klient, kører i egen tråd
-- `ChatClient`, forbinder klienten, sender brugerens beskeder
-- `ServerListener`, separat tråd på klientsiden der modtager beskeder fra serveren, mens brugeren skriver
-- `Message`, repræsenterer en besked
-- `MessageParser`, opbygger og parser protokolbeskeder
-- `ClientRegistry`, holder styr på tilsluttede brugere, skal være trådsikker
-- `ChatRoomManager`, holder styr på chatrum og medlemmer, skal være trådsikker
+- ChatServer, starter serveren, accepterer forbindelser, bruger ExecutorService
+- ClientHandler, håndterer kommunikationen med én klient, kører i egen tråd
+- ChatClient, forbinder klienten, sender brugerens beskeder
+- ServerListener, separat tråd på klientsiden der modtager beskeder fra serveren, mens brugeren skriver
+- Message, repræsenterer en besked
+- MessageParser, opbygger og parser protokolbeskeder
+- ClientRegistry, holder styr på tilsluttede brugere, skal være trådsikker
+- ChatRoomManager, holder styr på chatrum og medlemmer, skal være trådsikker
 
 ## Protokol
 
-Klient til server, tekstlinjer adskilt med `|`:
-```
+Klient til server, tekstlinjer adskilt med |:
 TYPE|TARGET|PAYLOAD
-```
-Eksempler: `LOGIN||bob`, `JOIN_ROOM|room42|`, `TEXT|room42|Hej alle`, `PRIVATE|alice|Hej Alice`, `QUIT||`
 
-Server parser med `message.split("\\|", 3)`.
+Eksempler: LOGIN||bob, JOIN_ROOM|room42|, TEXT|room42|Hej alle, PRIVATE|alice|Hej Alice, QUIT||
+
+Server parser med message.split("\\|", 3).
 
 Server til klient:
-```
 TIMESTAMP|TYPE|SENDER|TARGET|PAYLOAD
-```
-Klient parser med `message.split("\\|", 5)`.
+
+Klient parser med message.split("\\|", 5).
 
 Serveren fastsætter altid afsender og tidspunkt selv, stoler ikke på brugernavn sendt i beskeden efter login, brugernavnet er allerede knyttet til ClientHandler.
 
