@@ -3,17 +3,15 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.sql.SQLOutput;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class ChatServer {
 
-    private static final int NUMBER_OF_CLIENTS = 3;
+    private static final int THREAD_POOL_SIZE = 3;
 
-    private static final ExecutorService clientPool = Executors.newFixedThreadPool(NUMBER_OF_CLIENTS);
-
+    private static final ExecutorService clientPool = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
 
     public static void main(String[] args) {
         int port = 5000;
@@ -24,7 +22,6 @@ public class ChatServer {
                 System.err.println("Invalid port, using 5000");
             }
         }
-
 
         System.out.println("Starting ChatServer on port " + port);
         try (ServerSocket server = new ServerSocket(port)) {
