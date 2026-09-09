@@ -22,11 +22,11 @@ public class ChatClient {
              DataInputStream in = new DataInputStream(socket.getInputStream())) {
 
             System.out.println("Connected to server: " + socket.getRemoteSocketAddress());
-            System.out.println("DataInputStream/DataOutputStream created. Keeping connection open for 10 seconds...");
+            System.out.println("DataInputStream/DataOutputStream created. Keeping connection open for 30 seconds...");
 
             // No messages sent yet; just keep the connection open briefly to demonstrate connection establishment.
             try {
-                Thread.sleep(10000);
+                Thread.sleep(20000);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
