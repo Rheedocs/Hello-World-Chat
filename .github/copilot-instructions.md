@@ -9,25 +9,22 @@ Et chatprogram i Java hvor flere klienter kommunikerer gennem én fælles server
 ## Build og kør
 
 ```bash
-javac -d out src/**/*.java
-java -cp out ChatServer
-java -cp out ChatClient
+mvn compile
+mvn test
 ```
-
-(Opdatér hvis I ender med Maven.)
 
 ## Arkitektur
 
 Foreslået klassestruktur, følg medmindre I har en god grund til at afvige:
 
-- ChatServer, starter serveren, accepterer forbindelser, bruger ExecutorService
-- ClientHandler, håndterer kommunikationen med én klient, kører i egen tråd
-- ChatClient, forbinder klienten, sender brugerens beskeder
-- ServerListener, separat tråd på klientsiden der modtager beskeder fra serveren, mens brugeren skriver
-- Message, repræsenterer en besked
-- MessageParser, opbygger og parser protokolbeskeder
-- ClientRegistry, holder styr på tilsluttede brugere, skal være trådsikker
-- ChatRoomManager, holder styr på chatrum og medlemmer, skal være trådsikker
+- java.ChatServer, starter serveren, accepterer forbindelser, bruger ExecutorService
+- java.ClientHandler, håndterer kommunikationen med én klient, kører i egen tråd
+- java.ChatClient, forbinder klienten, sender brugerens beskeder
+- java.ServerListener, separat tråd på klientsiden der modtager beskeder fra serveren, mens brugeren skriver
+- java.Message, repræsenterer en besked
+- java.MessageParser, opbygger og parser protokolbeskeder
+- java.ClientRegistry, holder styr på tilsluttede brugere, skal være trådsikker
+- java.ChatRoomManager, holder styr på chatrum og medlemmer, skal være trådsikker
 
 ## Protokol
 
@@ -43,11 +40,11 @@ TIMESTAMP|TYPE|SENDER|TARGET|PAYLOAD
 
 Klient parser med message.split("\\|", 5).
 
-Serveren fastsætter altid afsender og tidspunkt selv, stoler ikke på brugernavn sendt i beskeden efter login, brugernavnet er allerede knyttet til ClientHandler.
+Serveren fastsætter altid afsender og tidspunkt selv, stoler ikke på brugernavn sendt i beskeden efter login, brugernavnet er allerede knyttet til java.ClientHandler.
 
 ## Trådsikkerhed
 
-Delte samlinger (brugerliste, chatrum-medlemskab) tilgås af flere ClientHandler-tråde samtidig. Brug ConcurrentHashMap eller trådsikre sets, ikke almindelig HashMap/ArrayList uden synkronisering. I skal kunne forklare hvorfor jeres valgte løsning er sikker.
+Delte samlinger (brugerliste, chatrum-medlemskab) tilgås af flere java.ClientHandler-tråde samtidig. Brug ConcurrentHashMap eller trådsikre sets, ikke almindelig HashMap/ArrayList uden synkronisering. I skal kunne forklare hvorfor jeres valgte løsning er sikker.
 
 ## Fejlhåndtering
 
@@ -62,7 +59,7 @@ Fejlformaterede beskeder må aldrig crashe serveren for andre klienter, kun send
 
 ## Test
 
-JUnit på MessageParser og central beskedhåndtering er krav, ikke valgfrit. Test med flere samtidige klienter må gerne dokumenteres som manuel integrationstest.
+JUnit på java.MessageParser og central beskedhåndtering er krav, ikke valgfrit. Test med flere samtidige klienter må gerne dokumenteres som manuel integrationstest.
 
 ## Arbejdsproces med agenten
 

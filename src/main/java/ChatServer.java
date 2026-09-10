@@ -1,3 +1,4 @@
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -9,9 +10,10 @@ public class ChatServer {
     private static final int THREAD_POOL_SIZE = 3;
     private static final ExecutorService clientPool = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
     private static final ClientRegistry clientRegistry = new ClientRegistry();
+    private static final ChatRoomManager chatRoomManager = new ChatRoomManager();
 
     public static void main(String[] args) {
-        int port = 5001;
+        int port = 5000;
         if (args.length > 0) {
             try {
                 port = Integer.parseInt(args[0]);
@@ -27,7 +29,7 @@ public class ChatServer {
                 System.out.println("Forbindelse accepteret fra " + clientSocket.getRemoteSocketAddress());
 
                 try {
-                    clientPool.submit(new ClientHandler(clientSocket, clientRegistry));
+                    clientPool.submit(new ClientHandler(clientSocket, clientRegistry, chatRoomManager));
                 } catch (IOException e) {
                     System.out.println("Kunne ikke starte ClientHandler: " + e.getMessage());
                     clientSocket.close();

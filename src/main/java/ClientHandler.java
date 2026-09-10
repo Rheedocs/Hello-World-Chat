@@ -1,3 +1,4 @@
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -9,14 +10,17 @@ import java.nio.charset.StandardCharsets;
 public class ClientHandler implements Runnable {
     private final Socket socket;
     private final ClientRegistry clientRegistry;
+    private final ChatRoomManager chatRoomManager;
     private final BufferedReader input;
     private final PrintWriter output;
     private String username;
+    private String currentRoom;
     private boolean connected = true;
 
-    public ClientHandler(Socket socket, ClientRegistry clientRegistry) throws IOException {
+    public ClientHandler(Socket socket, ClientRegistry clientRegistry, ChatRoomManager chatRoomManager) throws IOException {
         this.socket = socket;
         this.clientRegistry = clientRegistry;
+        this.chatRoomManager = chatRoomManager;
         this.input = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
         this.output = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
     }
@@ -56,10 +60,18 @@ public class ClientHandler implements Runnable {
                 case "LOGIN":
                     handleLogin(message);
                     break;
+                case "JOIN_ROOM":
+                    handleJoinRoom(message);
+                    break;
                 case "TEXT":
                     handleText(message);
                     break;
+                case "PRIVATE":
+                    handlePrivate(message);
+                    break;
                 case "QUIT":
+                    // Send logout confirmation before closing the connection
+                    sendServerMessage("OK", "server", username == null ? "" : username, "Du er nu logget ud.");
                     disconnect();
                     break;
                 default:
@@ -85,8 +97,37 @@ public class ClientHandler implements Runnable {
         }
 
         username = requestedUsername;
+        currentRoom = chatRoomManager.getDefaultRoom();
+        chatRoomManager.addUserToRoom(username, currentRoom);
         sendServerMessage("OK", "server", username, "");
-        System.out.println("Brugeren " + username + " loggede ind.");
+        System.out.println("Brugeren " + username + " loggede ind i rummet " + currentRoom + ".");
+    }
+
+    private void handleJoinRoom(Message message) {
+        if (username == null) {
+            sendServerMessage("ERROR", "server", "", "Du skal logge ind først.");
+            return;
+        }
+
+        String target = message.getTarget();
+        if (target == null || target.isBlank()) {
+            sendServerMessage("ERROR", "server", username, "Rumnavnet kan ikke være tomt.");
+            return;
+        }
+
+        String previousRoom = currentRoom;
+        chatRoomManager.moveUserToRoom(username, target);
+        currentRoom = chatRoomManager.getUserRoom(username);
+
+        if (currentRoom == null) {
+            currentRoom = target;
+        }
+
+        if (previousRoom != null && !previousRoom.equals(currentRoom)) {
+            System.out.println("Brugeren " + username + " flyttede fra " + previousRoom + " til " + currentRoom + ".");
+        }
+
+        sendServerMessage("OK", "server", username, "Du er nu i rummet " + currentRoom);
     }
 
     private void handleText(Message message) {
@@ -95,17 +136,52 @@ public class ClientHandler implements Runnable {
             return;
         }
 
-        String target = message.getTarget();
+        String roomName = message.getTarget();
         String payload = message.getPayload();
         if (payload == null) {
             payload = "";
         }
 
-        if (target == null || target.isBlank() || "all".equalsIgnoreCase(target)) {
-            clientRegistry.broadcastExceptSender(username, "all", payload);
-        } else {
-            sendServerMessage("ERROR", "server", username, "Private beskeder og chatrum er ikke implementeret endnu.");
+        if (roomName == null || roomName.isBlank() || "all".equalsIgnoreCase(roomName)) {
+            roomName = currentRoom;
         }
+
+        String normalizedRoom = chatRoomManager.getRoomNameForTarget(roomName);
+        if (currentRoom == null) {
+            currentRoom = normalizedRoom;
+        }
+
+        for (String memberName : chatRoomManager.getMembers(normalizedRoom)) {
+            if (!username.equals(memberName)) {
+                ClientHandler member = clientRegistry.getClient(memberName);
+                if (member != null) {
+                    member.sendServerMessage("TEXT", username, normalizedRoom, payload);
+                }
+            }
+        }
+    }
+
+    private void handlePrivate(Message message) {
+        if (username == null) {
+            sendServerMessage("ERROR", "server", "", "Du skal logge ind først.");
+            return;
+        }
+
+        String recipient = message.getTarget();
+        String payload = message.getPayload();
+        if (recipient == null || recipient.isBlank()) {
+            sendServerMessage("ERROR", "server", username, "Modtager mangler.");
+            return;
+        }
+
+        ClientHandler target = clientRegistry.getClient(recipient);
+        if (target == null) {
+            sendServerMessage("ERROR", "server", username, "Brugeren " + recipient + " er ikke online.");
+            return;
+        }
+
+        if (payload == null) payload = "";
+        target.sendServerMessage("PRIVATE", username, recipient, payload);
     }
 
     private void disconnect() {
@@ -115,6 +191,7 @@ public class ClientHandler implements Runnable {
         connected = false;
 
         if (username != null) {
+            chatRoomManager.removeUser(username);
             clientRegistry.unregister(username);
             System.out.println("Brugeren " + username + " forlod chatten.");
         }

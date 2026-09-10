@@ -1,3 +1,4 @@
+
 public class Message {
     private final String type;
     private final String target;

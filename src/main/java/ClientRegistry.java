@@ -1,3 +1,4 @@
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -15,6 +16,10 @@ public class ClientRegistry {
             return;
         }
         clients.remove(username);
+    }
+
+    public ClientHandler getClient(String username) {
+        return clients.get(username);
     }
 
     public boolean isUsernameTaken(String username) {
