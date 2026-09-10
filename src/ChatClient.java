@@ -1,41 +1,62 @@
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.util.Scanner;
 
 public class ChatClient {
     public static void main(String[] args) {
         String host = "localhost";
-        int port = 5000;
-        if (args.length > 0) host = args[0];
+        int port = 5001;
+        if (args.length > 0) {
+            host = args[0];
+        }
         if (args.length > 1) {
             try {
-                port = Integer.parseInt(args[1]);
+               port = Integer.parseInt(args[1]);
             } catch (NumberFormatException e) {
-                System.err.println("Invalid port, using 5000");
+               System.err.println("Ugyldig port, bruger 5000");
             }
         }
 
-        System.out.println("Connecting to " + host + ":" + port);
+        System.out.println("Forbinder til " + host + ":" + port);
         try (Socket socket = new Socket(host, port);
-             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-             DataInputStream in = new DataInputStream(socket.getInputStream())) {
+             BufferedReader serverInput = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+             PrintWriter out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
+             Scanner scanner = new Scanner(System.in)) {
 
-            System.out.println("Connected to server: " + socket.getRemoteSocketAddress());
-            System.out.println("DataInputStream/DataOutputStream created. Keeping connection open for 30 seconds...");
+            Thread listener = new Thread(new ServerListener(serverInput));
+            listener.setDaemon(true);
+            listener.start();
 
-            // No messages sent yet; just keep the connection open briefly to demonstrate connection establishment.
-            try {
-                Thread.sleep(20000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+            System.out.print("Indtast brugernavn: ");
+            String username = scanner.nextLine().trim();
+            if (!username.isBlank()) {
+               out.println(MessageParser.formatClientMessage("LOGIN", "", username));
+            }
+
+            while (true) {
+               String line = scanner.nextLine();
+               if (line == null) {
+                   break;
+               }
+
+               if (line.equalsIgnoreCase("/quit")) {
+                   out.println(MessageParser.formatClientMessage("QUIT", "", ""));
+                   break;
+               }
+
+               out.println(MessageParser.formatClientMessage("TEXT", "all", line));
             }
 
         } catch (IOException e) {
-            System.err.println("Client error: " + e.getMessage());
+            System.err.println("Clientfejl: " + e.getMessage());
             e.printStackTrace();
         }
 
-        System.out.println("Client exiting.");
+        System.out.println("Client lukker.");
     }
 }

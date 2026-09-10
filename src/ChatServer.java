@@ -1,5 +1,3 @@
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -8,70 +6,51 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class ChatServer {
-
     private static final int THREAD_POOL_SIZE = 3;
-
     private static final ExecutorService clientPool = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+    private static final ClientRegistry clientRegistry = new ClientRegistry();
 
     public static void main(String[] args) {
-        int port = 5000;
+        int port = 5001;
         if (args.length > 0) {
             try {
                 port = Integer.parseInt(args[0]);
             } catch (NumberFormatException e) {
-                System.err.println("Invalid port, using 5000");
+                System.err.println("Ugyldig port, bruger 5000");
             }
         }
 
-        System.out.println("Starting ChatServer on port " + port);
+        System.out.println("Starter ChatServer på port " + port);
         try (ServerSocket server = new ServerSocket(port)) {
             while (true) {
-                Socket client = server.accept();
-                System.out.println("Accepted connection from " + client.getRemoteSocketAddress());
+                Socket clientSocket = server.accept();
+                System.out.println("Forbindelse accepteret fra " + clientSocket.getRemoteSocketAddress());
 
-                // Start a handler thread that creates DataInputStream/DataOutputStream and keeps the connection open.
-                // Clientpool starter threadpoolen med et begrænsning på 3 tråde.
-                clientPool.submit(()-> {
-                    try (DataInputStream in = new DataInputStream(client.getInputStream());
-                         DataOutputStream out = new DataOutputStream(client.getOutputStream())) {
-
-                        System.out.println("START: " + Thread.currentThread().getName());;
-
-                        Thread.sleep(10000);
-
-                        System.out.println("END: " + Thread.currentThread().getName());
-
-                    } catch (IOException e) {
-                        System.out.println("Handler IO error: " + e.getMessage());
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    } finally {
-                        try {
-                            client.close();
-                        } catch (IOException ignored) {
-                        }
-                        System.out.println("Closed connection to " + client.getRemoteSocketAddress());
-                    }
-                });
+                try {
+                    clientPool.submit(new ClientHandler(clientSocket, clientRegistry));
+                } catch (IOException e) {
+                    System.out.println("Kunne ikke starte ClientHandler: " + e.getMessage());
+                    clientSocket.close();
+                }
             }
         } catch (IOException e) {
-            System.err.println("Server error: " + e.getMessage());
+            System.err.println("Serverfejl: " + e.getMessage());
             e.printStackTrace();
         } finally {
             shutdownThreadPool();
         }
     }
-    private static void shutdownThreadPool(){
+
+    private static void shutdownThreadPool() {
         clientPool.shutdown();
 
         try {
-            boolean finished = clientPool.awaitTermination(5,TimeUnit.SECONDS);
-
-            if (!finished){
-                System.out.println("Threads are still running. Forcing shutdown...");
+            boolean finished = clientPool.awaitTermination(5, TimeUnit.SECONDS);
+            if (!finished) {
+                System.out.println("Tråde kører stadig. Tvinger lukning...");
                 clientPool.shutdownNow();
             }
-        } catch (InterruptedException exception){
+        } catch (InterruptedException exception) {
             clientPool.shutdown();
             Thread.currentThread().interrupt();
         }
