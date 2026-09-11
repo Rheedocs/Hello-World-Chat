@@ -124,13 +124,13 @@ public class ChatClient {
             try {
                 String serverMessage = serverMessages.take();
                 String[] parts = serverMessage.split("\\|", 5);
-                if (parts.length < 2) {
+                if (parts.length < 4) {
                     continue;
                 }
                 String status = parts[1].toUpperCase();
                 if (MESSAGE_TYPE_OK.equals(status)) {
                     loginPhase.set(false);
-                    System.out.println("Velkommen, " + parts[2] + "!");
+                    System.out.println("Velkommen, " + parts[3] + "!");
                     return true;
                 }
                 if (MESSAGE_TYPE_ERROR.equals(status)) {
