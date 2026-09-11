@@ -2,6 +2,9 @@
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -10,11 +13,29 @@ public class ChatServer {
     private static final int DEFAULT_PORT = 5000;
     private static final int THREAD_POOL_SIZE = 3;
     private static final int SHUTDOWN_TIMEOUT_SECONDS = 5;
+    private static final Path SHARED_FILES_DIRECTORY = Paths.get("server_files");
     private static final ExecutorService clientPool = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
     private static final ClientRegistry clientRegistry = new ClientRegistry();
     private static final ChatRoomManager chatRoomManager = new ChatRoomManager();
 
+    public static Path getSharedFilesDirectory() {
+        return SHARED_FILES_DIRECTORY;
+    }
+
+    public static void ensureSharedFilesDirectoryExists() throws IOException {
+        if (Files.notExists(SHARED_FILES_DIRECTORY)) {
+            Files.createDirectories(SHARED_FILES_DIRECTORY);
+        }
+    }
+
     public static void main(String[] args) {
+        try {
+            ensureSharedFilesDirectoryExists();
+        } catch (IOException e) {
+            System.err.println("Kunne ikke oprette server_files-mappen: " + e.getMessage());
+            return;
+        }
+
         int port = DEFAULT_PORT;
         if (args.length > 0) {
             try {
