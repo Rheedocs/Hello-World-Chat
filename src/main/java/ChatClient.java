@@ -195,6 +195,12 @@ public class ChatClient {
             String slashCommand = parseSlashCommand(trimmed);
             if (slashCommand != null) {
                 out.println(slashCommand);
+                if (slashCommand.startsWith(COMMAND_PRIVATE + "|")) {
+                    String[] parts = slashCommand.split("\\|", 3);
+                    if (parts.length >= 3) {
+                        System.out.println("Du hvisker til " + parts[1] + ": " + parts[2]);
+                    }
+                }
                 if (slashCommand.startsWith(COMMAND_QUIT + "|")) {
                     break;
                 }
@@ -213,7 +219,9 @@ public class ChatClient {
                 continue;
             }
 
-            out.println(MessageParser.formatClientMessage(COMMAND_TEXT, DEFAULT_ROOM, line));
+            String textMessage = MessageParser.formatClientMessage(COMMAND_TEXT, DEFAULT_ROOM, line);
+            out.println(textMessage);
+            System.out.println("Du: " + line);
         }
     }
 
