@@ -12,18 +12,26 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ChatClient {
+    private static final String DEFAULT_HOST = "localhost";
+    private static final int DEFAULT_PORT = 5000;
+    private static final int INPUT_QUEUE_SIZE = 64;
+    private static final long USER_INPUT_TIMEOUT_MS = 30000L;
+    private static final long CONNECTION_CHECK_TIMEOUT_MS = 500L;
+    private static final String COMMAND_PRIVATE = "PRIVATE";
+    private static final String COMMAND_JOIN_ROOM = "JOIN_ROOM";
+    private static final String COMMAND_QUIT = "QUIT";
+    private static final String COMMAND_LOGIN = "LOGIN";
+    private static final String COMMAND_TEXT = "TEXT";
+    private static final String DEFAULT_ROOM = "all";
+
     public static void main(String[] args) {
-        String host = "localhost";
-        int port = 5000;
+        String host = DEFAULT_HOST;
+        int port = DEFAULT_PORT;
         if (args.length > 0) {
             host = args[0];
         }
         if (args.length > 1) {
-            try {
-                port = Integer.parseInt(args[1]);
-            } catch (NumberFormatException e) {
-                System.err.println("Ugyldig port, bruger 5000");
-            }
+            port = parsePort(args[1]);
         }
 
         System.out.println("Forbinder til " + host + ":" + port);
@@ -36,14 +44,12 @@ public class ChatClient {
             Thread listener = new Thread(new ServerListener(serverInput, socket, connectionLost));
             listener.start();
 
-            // Separat tråd der læser brugerinput og lægger det i en kø,
-            // så hovedloopet ikke blokerer uendeligt og kan tjekke connectionLost.
-            BlockingQueue<String> inputQueue = new ArrayBlockingQueue<>(64);
+            BlockingQueue<String> inputQueue = new ArrayBlockingQueue<>(INPUT_QUEUE_SIZE);
             Thread inputThread = new Thread(() -> {
                 try {
                     while (true) {
-                        String l = scanner.nextLine();
-                        inputQueue.put(l);
+                        String line = scanner.nextLine();
+                        inputQueue.put(line);
                     }
                 } catch (InterruptedException e) {
                     // afsluttes normalt
@@ -54,66 +60,83 @@ public class ChatClient {
             inputThread.setDaemon(true);
             inputThread.start();
 
-            System.out.print("Indtast brugernavn: ");
-            String username = null;
-            try {
-                username = inputQueue.take();
-            } catch (InterruptedException e) {
-                // ignoreres
-            }
-            if (username != null) {
-                username = username.trim();
-            }
+            String username = readUsername(inputQueue);
             if (username != null && !username.isBlank()) {
-                out.println(MessageParser.formatClientMessage("LOGIN", "", username));
+                out.println(MessageParser.formatClientMessage(COMMAND_LOGIN, "", username));
             }
 
-            while (true) {
-                String line;
-                try {
-                    line = inputQueue.poll(500, TimeUnit.MILLISECONDS);
-                } catch (InterruptedException e) {
-                    break;
-                }
-
-                if (line == null) {
-                    // Ingen input indenfor timeout, tjek om forbindelsen er tabt
-                    if (connectionLost.get()) {
-                        System.out.println("Forbindelsen til serveren blev afbrudt.");
-                        break;
-                    }
-                    continue;
-                }
-
-                String trimmed = line.trim();
-                String upper = trimmed.isEmpty() ? "" : trimmed.split("\\|", 2)[0].toUpperCase();
-                boolean isCommand = upper.equals("PRIVATE") || upper.equals("JOIN_ROOM")
-                        || upper.equals("QUIT") || upper.equals("LOGIN") || upper.equals("TEXT");
-
-                if (isCommand && trimmed.contains("|")) {
-                    // Send den rå kommandolinje, serveren parser TYPE|TARGET|PAYLOAD
-                    out.println(trimmed);
-                    if (upper.equals("QUIT")) {
-                        // Ingen synkron læsning her, ServerListener printer bekræftelsen
-                        break;
-                    }
-                    continue;
-                }
-
-                // Almindelig tekst uden prefix sendes som TEXT til nuværende rum
-                out.println(MessageParser.formatClientMessage("TEXT", "all", line));
-            }
-
-            inputThread.interrupt();
-            try {
-                inputThread.join(200);
-            } catch (InterruptedException ignored) {
-            }
+            handleChatLoop(inputQueue, connectionLost, out);
+            stopInputThread(inputThread);
 
         } catch (IOException e) {
             System.err.println("Clientfejl: " + e.getMessage());
         }
 
         System.out.println("Client lukker.");
+    }
+
+    private static int parsePort(String rawPort) {
+        try {
+            return Integer.parseInt(rawPort);
+        } catch (NumberFormatException e) {
+            System.err.println("Ugyldig port, bruger " + DEFAULT_PORT);
+            return DEFAULT_PORT;
+        }
+    }
+
+    private static String readUsername(BlockingQueue<String> inputQueue) {
+        System.out.print("Indtast brugernavn: ");
+        String username = null;
+        try {
+            username = inputQueue.take();
+        } catch (InterruptedException e) {
+            // ignoreres
+        }
+        if (username != null) {
+            username = username.trim();
+        }
+        return username;
+    }
+
+    private static void handleChatLoop(BlockingQueue<String> inputQueue, AtomicBoolean connectionLost, PrintWriter out) {
+        while (true) {
+            String line;
+            try {
+                line = inputQueue.poll(CONNECTION_CHECK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                break;
+            }
+
+            if (line == null) {
+                if (connectionLost.get()) {
+                    System.out.println("Forbindelsen til serveren blev afbrudt.");
+                    break;
+                }
+                continue;
+            }
+
+            String trimmed = line.trim();
+            String upper = trimmed.isEmpty() ? "" : trimmed.split("\\|", 2)[0].toUpperCase();
+            boolean isCommand = upper.equals(COMMAND_PRIVATE) || upper.equals(COMMAND_JOIN_ROOM)
+                    || upper.equals(COMMAND_QUIT) || upper.equals(COMMAND_LOGIN) || upper.equals(COMMAND_TEXT);
+
+            if (isCommand && trimmed.contains("|")) {
+                out.println(trimmed);
+                if (upper.equals(COMMAND_QUIT)) {
+                    break;
+                }
+                continue;
+            }
+
+            out.println(MessageParser.formatClientMessage(COMMAND_TEXT, DEFAULT_ROOM, line));
+        }
+    }
+
+    private static void stopInputThread(Thread inputThread) {
+        inputThread.interrupt();
+        try {
+            inputThread.join(200);
+        } catch (InterruptedException ignored) {
+        }
     }
 }

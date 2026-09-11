@@ -31,8 +31,16 @@ public class ClientRegistry {
     }
 
     public void broadcastExceptSender(String senderUsername, String target, String payload) {
+        if (senderUsername == null) {
+            return;
+        }
+
         for (ClientHandler client : clients.values()) {
-            if (!senderUsername.equals(client.getUsername())) {
+            if (client == null) {
+                continue;
+            }
+            String clientUsername = client.getUsername();
+            if (clientUsername != null && !senderUsername.equals(clientUsername)) {
                 client.sendServerMessage("TEXT", senderUsername, target, payload);
             }
         }

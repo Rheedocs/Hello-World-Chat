@@ -5,7 +5,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 public class ChatRoomManager {
-    public static final String DEFAULT_ROOM = "lobby";
+    private static final String DEFAULT_ROOM_NAME = "lobby";
+    private static final String ALL_TARGET = "all";
+    public static final String DEFAULT_ROOM = DEFAULT_ROOM_NAME;
 
     private final ConcurrentMap<String, Set<String>> roomMembers = new ConcurrentHashMap<>();
 
@@ -75,7 +77,7 @@ public class ChatRoomManager {
     }
 
     public String getRoomNameForTarget(String target) {
-        if (target == null || target.isBlank() || "all".equalsIgnoreCase(target)) {
+        if (target == null || target.isBlank() || ALL_TARGET.equalsIgnoreCase(target)) {
             return DEFAULT_ROOM;
         }
         return normalizeRoom(target);

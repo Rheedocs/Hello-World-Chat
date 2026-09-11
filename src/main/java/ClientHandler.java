@@ -8,6 +8,16 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 
 public class ClientHandler implements Runnable {
+    private static final String MESSAGE_TYPE_LOGIN = "LOGIN";
+    private static final String MESSAGE_TYPE_JOIN_ROOM = "JOIN_ROOM";
+    private static final String MESSAGE_TYPE_TEXT = "TEXT";
+    private static final String MESSAGE_TYPE_PRIVATE = "PRIVATE";
+    private static final String MESSAGE_TYPE_QUIT = "QUIT";
+    private static final String MESSAGE_TYPE_OK = "OK";
+    private static final String MESSAGE_TYPE_ERROR = "ERROR";
+    private static final String SERVER_USER = "server";
+    private static final String TARGET_ALL = "all";
+
     private final Socket socket;
     private final ClientRegistry clientRegistry;
     private final ChatRoomManager chatRoomManager;
@@ -54,64 +64,63 @@ public class ClientHandler implements Runnable {
     private void handleClientMessage(String rawMessage) {
         try {
             Message message = MessageParser.parseClientMessage(rawMessage);
-            String type = message.getType();
+            String type = message.getType().toUpperCase();
 
             switch (type) {
-                case "LOGIN":
+                case MESSAGE_TYPE_LOGIN:
                     handleLogin(message);
                     break;
-                case "JOIN_ROOM":
+                case MESSAGE_TYPE_JOIN_ROOM:
                     handleJoinRoom(message);
                     break;
-                case "TEXT":
+                case MESSAGE_TYPE_TEXT:
                     handleText(message);
                     break;
-                case "PRIVATE":
+                case MESSAGE_TYPE_PRIVATE:
                     handlePrivate(message);
                     break;
-                case "QUIT":
-                    // Send logout confirmation before closing the connection
-                    sendServerMessage("OK", "server", username == null ? "" : username, "Du er nu logget ud.");
+                case MESSAGE_TYPE_QUIT:
+                    sendServerMessage(MESSAGE_TYPE_OK, SERVER_USER, username == null ? "" : username, "Du er nu logget ud.");
                     disconnect();
                     break;
                 default:
-                    sendServerMessage("ERROR", "server", username == null ? "" : username, "Ukendt kommando: " + type);
+                    sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, username == null ? "" : username, "Ukendt kommando: " + type);
                     break;
             }
         } catch (IllegalArgumentException e) {
             String target = username == null ? "" : username;
-            sendServerMessage("ERROR", "server", target, e.getMessage());
+            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, target, e.getMessage());
         }
     }
 
     private void handleLogin(Message message) {
         String requestedUsername = message.getPayload();
         if (requestedUsername == null || requestedUsername.isBlank()) {
-            sendServerMessage("ERROR", "server", "", "Brugernavnet kan ikke være tomt.");
+            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, "", "Brugernavnet kan ikke være tomt.");
             return;
         }
 
         if (!clientRegistry.register(requestedUsername, this)) {
-            sendServerMessage("ERROR", "server", requestedUsername, "Brugernavnet er optaget.");
+            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, requestedUsername, "Brugernavnet er optaget.");
             return;
         }
 
         username = requestedUsername;
         currentRoom = chatRoomManager.getDefaultRoom();
         chatRoomManager.addUserToRoom(username, currentRoom);
-        sendServerMessage("OK", "server", username, "");
+        sendServerMessage(MESSAGE_TYPE_OK, SERVER_USER, username, "");
         System.out.println("Brugeren " + username + " loggede ind i rummet " + currentRoom + ".");
     }
 
     private void handleJoinRoom(Message message) {
         if (username == null) {
-            sendServerMessage("ERROR", "server", "", "Du skal logge ind først.");
+            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, "", "Du skal logge ind først.");
             return;
         }
 
         String target = message.getTarget();
         if (target == null || target.isBlank()) {
-            sendServerMessage("ERROR", "server", username, "Rumnavnet kan ikke være tomt.");
+            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, username, "Rumnavnet kan ikke være tomt.");
             return;
         }
 
@@ -127,12 +136,12 @@ public class ClientHandler implements Runnable {
             System.out.println("Brugeren " + username + " flyttede fra " + previousRoom + " til " + currentRoom + ".");
         }
 
-        sendServerMessage("OK", "server", username, "Du er nu i rummet " + currentRoom);
+        sendServerMessage(MESSAGE_TYPE_OK, SERVER_USER, username, "Du er nu i rummet " + currentRoom);
     }
 
     private void handleText(Message message) {
         if (username == null) {
-            sendServerMessage("ERROR", "server", "", "Du skal logge ind først.");
+            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, "", "Du skal logge ind først.");
             return;
         }
 
@@ -142,7 +151,7 @@ public class ClientHandler implements Runnable {
             payload = "";
         }
 
-        if (roomName == null || roomName.isBlank() || "all".equalsIgnoreCase(roomName)) {
+        if (roomName == null || roomName.isBlank() || TARGET_ALL.equalsIgnoreCase(roomName)) {
             roomName = currentRoom;
         }
 
@@ -155,7 +164,7 @@ public class ClientHandler implements Runnable {
             if (!username.equals(memberName)) {
                 ClientHandler member = clientRegistry.getClient(memberName);
                 if (member != null) {
-                    member.sendServerMessage("TEXT", username, normalizedRoom, payload);
+                member.sendServerMessage(MESSAGE_TYPE_TEXT, username, normalizedRoom, payload);
                 }
             }
         }
@@ -163,25 +172,25 @@ public class ClientHandler implements Runnable {
 
     private void handlePrivate(Message message) {
         if (username == null) {
-            sendServerMessage("ERROR", "server", "", "Du skal logge ind først.");
+            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, "", "Du skal logge ind først.");
             return;
         }
 
         String recipient = message.getTarget();
         String payload = message.getPayload();
         if (recipient == null || recipient.isBlank()) {
-            sendServerMessage("ERROR", "server", username, "Modtager mangler.");
+            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, username, "Modtager mangler.");
             return;
         }
 
         ClientHandler target = clientRegistry.getClient(recipient);
         if (target == null) {
-            sendServerMessage("ERROR", "server", username, "Brugeren " + recipient + " er ikke online.");
+            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, username, "Brugeren " + recipient + " er ikke online.");
             return;
         }
 
         if (payload == null) payload = "";
-        target.sendServerMessage("PRIVATE", username, recipient, payload);
+        target.sendServerMessage(MESSAGE_TYPE_PRIVATE, username, recipient, payload);
     }
 
     private void disconnect() {
