@@ -130,6 +130,7 @@ public class ChatClient {
                 String status = parts[1].toUpperCase();
                 if (MESSAGE_TYPE_OK.equals(status)) {
                     loginPhase.set(false);
+                    System.out.println("Velkommen, " + parts[2] + "!");
                     return true;
                 }
                 if (MESSAGE_TYPE_ERROR.equals(status)) {

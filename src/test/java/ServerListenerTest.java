@@ -1,3 +1,4 @@
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.BufferedReader;
@@ -10,6 +11,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 
 public class ServerListenerTest {
+
+    @Test
+    public void serverListenerShouldFormatTextPrivateAndErrorMessagesReadably() {
+        assertEquals("alice: Hej alle", ServerListener.formatForDisplay("2026-09-11 13:00:00|TEXT|alice|all|Hej alle"));
+        assertEquals("[Privat fra bob]: Hej Alice", ServerListener.formatForDisplay("2026-09-11 13:00:00|PRIVATE|bob|alice|Hej Alice"));
+        assertEquals("[Fejl]: Brugernavn er optaget", ServerListener.formatForDisplay("2026-09-11 13:00:00|ERROR|server|client|Brugernavn er optaget"));
+    }
 
     @Test
     public void serverListenerShouldNotQueueMessagesAfterLoginSuccess() throws Exception {
