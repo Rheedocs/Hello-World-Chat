@@ -57,7 +57,7 @@ public class ChatClient {
             System.out.print("Indtast brugernavn: ");
             String username = null;
             try {
-                username = inputQueue.poll(30, TimeUnit.SECONDS);
+                username = inputQueue.take();
             } catch (InterruptedException e) {
                 // ignoreres
             }
