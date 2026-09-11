@@ -1,6 +1,7 @@
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
 
@@ -13,6 +14,26 @@ public class MessageParserTest {
         assertEquals("LOGIN", message.getType());
         assertEquals("", message.getTarget());
         assertEquals("bob", message.getPayload());
+    }
+
+    @Test
+    public void parseClientMessageWithNullShouldThrowIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class, () -> MessageParser.parseClientMessage(null));
+    }
+
+    @Test
+    public void parseClientMessageWithEmptyStringShouldThrowIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class, () -> MessageParser.parseClientMessage("   "));
+    }
+
+    @Test
+    public void parseClientMessageWithSingleFieldShouldThrowIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class, () -> MessageParser.parseClientMessage("LOGIN"));
+    }
+
+    @Test
+    public void parseClientMessageWithTwoFieldsShouldThrowIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class, () -> MessageParser.parseClientMessage("LOGIN|bob"));
     }
 
     @Test

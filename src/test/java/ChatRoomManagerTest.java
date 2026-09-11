@@ -1,6 +1,8 @@
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Set;
@@ -31,5 +33,24 @@ public class ChatRoomManagerTest {
         assertFalse(defaultMembers.contains("bob"));
         assertTrue(devMembers.contains("bob"));
         assertEquals("dev", manager.getUserRoom("bob"));
+    }
+
+    @Test
+    public void getMembersForUnknownRoomShouldReturnEmptySet() {
+        ChatRoomManager manager = new ChatRoomManager();
+
+        Set<String> members = manager.getMembers("unknown-room");
+
+        assertNotNull(members);
+        assertTrue(members.isEmpty());
+    }
+
+    @Test
+    public void removeUserFromUnknownRoomShouldNotThrow() {
+        ChatRoomManager manager = new ChatRoomManager();
+
+        manager.removeUser("ghost");
+
+        assertNull(manager.getUserRoom("ghost"));
     }
 }
