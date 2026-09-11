@@ -48,6 +48,8 @@ public class ChatClient {
             Thread listener = new Thread(new ServerListener(serverInput, socket, connectionLost, serverMessages, loginPhase));
             listener.start();
 
+            System.out.println("Kommandoer: /w <bruger> <besked>, /join <rum>, /quit. Skriv bare almindelig tekst for at chatte i dit nuværende rum.");
+
             BlockingQueue<String> inputQueue = new ArrayBlockingQueue<>(INPUT_QUEUE_SIZE);
             Thread inputThread = new Thread(() -> {
                 try {
@@ -140,6 +142,38 @@ public class ChatClient {
         }
     }
 
+    private static String parseSlashCommand(String line) {
+        if (line == null) {
+            return null;
+        }
+
+        String trimmed = line.trim();
+        if (!trimmed.startsWith("/")) {
+            return null;
+        }
+
+        String[] parts = trimmed.split("\\s+", 3);
+        String command = parts[0].substring(1).toLowerCase();
+
+        switch (command) {
+            case "w":
+            case "whisper":
+                if (parts.length < 3) {
+                    return null;
+                }
+                return MessageParser.formatClientMessage(COMMAND_PRIVATE, parts[1], parts[2]);
+            case "join":
+                if (parts.length < 2) {
+                    return null;
+                }
+                return MessageParser.formatClientMessage(COMMAND_JOIN_ROOM, parts[1], "");
+            case "quit":
+                return MessageParser.formatClientMessage(COMMAND_QUIT, "", "");
+            default:
+                return null;
+        }
+    }
+
     private static void handleChatLoop(BlockingQueue<String> inputQueue, AtomicBoolean connectionLost, PrintWriter out) {
         while (true) {
             String line;
@@ -158,6 +192,15 @@ public class ChatClient {
             }
 
             String trimmed = line.trim();
+            String slashCommand = parseSlashCommand(trimmed);
+            if (slashCommand != null) {
+                out.println(slashCommand);
+                if (slashCommand.startsWith(COMMAND_QUIT + "|")) {
+                    break;
+                }
+                continue;
+            }
+
             String upper = trimmed.isEmpty() ? "" : trimmed.split("\\|", 2)[0].toUpperCase();
             boolean isCommand = upper.equals(COMMAND_PRIVATE) || upper.equals(COMMAND_JOIN_ROOM)
                     || upper.equals(COMMAND_QUIT) || upper.equals(COMMAND_LOGIN) || upper.equals(COMMAND_TEXT);

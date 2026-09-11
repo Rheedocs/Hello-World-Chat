@@ -13,6 +13,33 @@ java -cp target/classes ChatServer
 java -cp target/classes ChatClient
 ```
 
+Når klienten starter, vises den korte hjælp:
+
+```text
+Kommandoer: /w <bruger> <besked>, /join <rum>, /quit. Skriv bare almindelig tekst for at chatte i dit nuværende rum.
+```
+
+### Kommandotolkning i klienten
+
+Den primære, dokumenterede måde at sende kommandoer på er via slash-kommander:
+
+```text
+/w alice Hej Alice
+/whisper alice Hej Alice
+/join room42
+/quit
+```
+
+De oversættes til protokollen:
+
+```text
+PRIVATE|alice|Hej Alice
+JOIN_ROOM|room42|
+QUIT||
+```
+
+Der er stadig støtte for den rå protokolform direkte som fallback, men slash-kommanderne er den anbefalede måde at bruge klienten på.
+
 ## Protokollen
 
 Klient til server, tekstlinjer adskilt med `|`:
