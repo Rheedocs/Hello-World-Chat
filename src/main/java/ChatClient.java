@@ -22,6 +22,8 @@ public class ChatClient {
     private static final String COMMAND_QUIT = "QUIT";
     private static final String COMMAND_LOGIN = "LOGIN";
     private static final String COMMAND_TEXT = "TEXT";
+    private static final String MESSAGE_TYPE_OK = "OK";
+    private static final String MESSAGE_TYPE_ERROR = "ERROR";
     private static final String DEFAULT_ROOM = "all";
 
     public static void main(String[] args) {
@@ -41,7 +43,9 @@ public class ChatClient {
              Scanner scanner = new Scanner(System.in)) {
 
             AtomicBoolean connectionLost = new AtomicBoolean(false);
-            Thread listener = new Thread(new ServerListener(serverInput, socket, connectionLost));
+            BlockingQueue<String> serverMessages = new ArrayBlockingQueue<>(64);
+            AtomicBoolean loginPhase = new AtomicBoolean(true);
+            Thread listener = new Thread(new ServerListener(serverInput, socket, connectionLost, serverMessages, loginPhase));
             listener.start();
 
             BlockingQueue<String> inputQueue = new ArrayBlockingQueue<>(INPUT_QUEUE_SIZE);
@@ -60,12 +64,27 @@ public class ChatClient {
             inputThread.setDaemon(true);
             inputThread.start();
 
-            String username = readUsername(inputQueue);
-            if (username != null && !username.isBlank()) {
+            boolean loggedIn = false;
+            while (!loggedIn) {
+                String username = readUsername(inputQueue);
+                if (username == null) {
+                    break;
+                }
+                username = username.trim();
+                if (username.isBlank()) {
+                    continue;
+                }
+
                 out.println(MessageParser.formatClientMessage(COMMAND_LOGIN, "", username));
+                loggedIn = waitForLoginResult(serverMessages, loginPhase);
+                if (!loggedIn) {
+                    System.out.println("Login fejlede. Prøv igen.");
+                }
             }
 
-            handleChatLoop(inputQueue, connectionLost, out);
+            if (loggedIn) {
+                handleChatLoop(inputQueue, connectionLost, out);
+            }
             stopInputThread(inputThread);
 
         } catch (IOException e) {
@@ -96,6 +115,29 @@ public class ChatClient {
             username = username.trim();
         }
         return username;
+    }
+
+    private static boolean waitForLoginResult(BlockingQueue<String> serverMessages, AtomicBoolean loginPhase) {
+        while (true) {
+            try {
+                String serverMessage = serverMessages.take();
+                String[] parts = serverMessage.split("\\|", 5);
+                if (parts.length < 2) {
+                    continue;
+                }
+                String status = parts[1].toUpperCase();
+                if (MESSAGE_TYPE_OK.equals(status)) {
+                    loginPhase.set(false);
+                    return true;
+                }
+                if (MESSAGE_TYPE_ERROR.equals(status)) {
+                    return false;
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
     }
 
     private static void handleChatLoop(BlockingQueue<String> inputQueue, AtomicBoolean connectionLost, PrintWriter out) {

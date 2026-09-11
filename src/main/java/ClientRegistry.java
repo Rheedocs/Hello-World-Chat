@@ -5,10 +5,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 public class ClientRegistry {
-    private final ConcurrentMap<String, ClientHandler> clients = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, MessageSender> clients = new ConcurrentHashMap<>();
 
-    public boolean register(String username, ClientHandler clientHandler) {
-        return clients.putIfAbsent(username, clientHandler) == null;
+    public boolean register(String username, MessageSender client) {
+        return clients.putIfAbsent(username, client) == null;
     }
 
     public void unregister(String username) {
@@ -18,7 +18,7 @@ public class ClientRegistry {
         clients.remove(username);
     }
 
-    public ClientHandler getClient(String username) {
+    public MessageSender getClient(String username) {
         return clients.get(username);
     }
 
@@ -26,7 +26,7 @@ public class ClientRegistry {
         return username != null && clients.containsKey(username);
     }
 
-    public List<ClientHandler> getConnectedClients() {
+    public List<MessageSender> getConnectedClients() {
         return new ArrayList<>(clients.values());
     }
 
@@ -35,7 +35,7 @@ public class ClientRegistry {
             return;
         }
 
-        for (ClientHandler client : clients.values()) {
+        for (MessageSender client : clients.values()) {
             if (client == null) {
                 continue;
             }

@@ -7,7 +7,7 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 
-public class ClientHandler implements Runnable {
+public class ClientHandler implements Runnable, MessageSender {
     private static final String MESSAGE_TYPE_LOGIN = "LOGIN";
     private static final String MESSAGE_TYPE_JOIN_ROOM = "JOIN_ROOM";
     private static final String MESSAGE_TYPE_TEXT = "TEXT";
@@ -35,6 +35,7 @@ public class ClientHandler implements Runnable {
         this.output = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
     }
 
+    @Override
     public String getUsername() {
         return username;
     }
@@ -162,9 +163,9 @@ public class ClientHandler implements Runnable {
 
         for (String memberName : chatRoomManager.getMembers(normalizedRoom)) {
             if (!username.equals(memberName)) {
-                ClientHandler member = clientRegistry.getClient(memberName);
+                MessageSender member = clientRegistry.getClient(memberName);
                 if (member != null) {
-                member.sendServerMessage(MESSAGE_TYPE_TEXT, username, normalizedRoom, payload);
+                    member.sendServerMessage(MESSAGE_TYPE_TEXT, username, normalizedRoom, payload);
                 }
             }
         }
@@ -183,7 +184,7 @@ public class ClientHandler implements Runnable {
             return;
         }
 
-        ClientHandler target = clientRegistry.getClient(recipient);
+        MessageSender target = clientRegistry.getClient(recipient);
         if (target == null) {
             sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, username, "Brugeren " + recipient + " er ikke online.");
             return;
