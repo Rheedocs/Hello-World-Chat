@@ -1,7 +1,12 @@
+package client;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -10,6 +15,8 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import protocol.MessageParser;
 
 public class ChatClient {
     private static final String DEFAULT_HOST = "localhost";
@@ -27,6 +34,8 @@ public class ChatClient {
     private static final String DEFAULT_ROOM = "all";
 
     public static void main(String[] args) {
+        configureUtf8Console();
+
         String host = DEFAULT_HOST;
         int port = DEFAULT_PORT;
         if (args.length > 0) {
@@ -40,7 +49,7 @@ public class ChatClient {
         try (Socket socket = new Socket(host, port);
              BufferedReader serverInput = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
              PrintWriter out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
-             Scanner scanner = new Scanner(System.in)) {
+             Scanner scanner = new Scanner(new InputStreamReader(new BufferedInputStream(System.in), StandardCharsets.UTF_8))) {
 
             AtomicBoolean connectionLost = new AtomicBoolean(false);
             BlockingQueue<String> serverMessages = new ArrayBlockingQueue<>(64);
@@ -94,6 +103,15 @@ public class ChatClient {
         }
 
         System.out.println("Client lukker.");
+    }
+
+    private static void configureUtf8Console() {
+        try {
+            System.setOut(new PrintStream(new BufferedOutputStream(System.out), true, StandardCharsets.UTF_8.name()));
+            System.setErr(new PrintStream(new BufferedOutputStream(System.err), true, StandardCharsets.UTF_8.name()));
+        } catch (Exception e) {
+            System.err.println("Kunne ikke aktivere UTF-8 på konsollen: " + e.getMessage());
+        }
     }
 
     private static int parsePort(String rawPort) {

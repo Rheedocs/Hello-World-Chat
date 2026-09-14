@@ -1,4 +1,6 @@
 
+package server;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -6,6 +8,10 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+
+import domain.Message;
+import protocol.MessageParser;
+import protocol.MessageSender;
 
 public class ClientHandler implements Runnable, MessageSender {
     private static final String MESSAGE_TYPE_LOGIN = "LOGIN";

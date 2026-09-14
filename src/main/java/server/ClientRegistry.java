@@ -1,8 +1,12 @@
 
+package server;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+
+import protocol.MessageSender;
 
 public class ClientRegistry {
     private final ConcurrentMap<String, MessageSender> clients = new ConcurrentHashMap<>();
