@@ -19,7 +19,7 @@ Bemærk, danske tegn (æ, ø, å) kan vises forkert i nogle Windows-terminaler (
 Når klienten starter, vises den korte hjælp:
 
 ```text
-Kommandoer: /w <bruger> <besked>, /join <rum>, /list, /get <filnavn>, /quit. Skriv bare almindelig tekst for at chatte i dit nuværende rum.
+Kommandoer: /w <bruger> <besked>, /join <rum>, /list, /get <filnavn>, /quit, /help. Skriv bare almindelig tekst for at chatte i dit nuværende rum.
 ```
 
 ### Kommandotolkning i klienten
