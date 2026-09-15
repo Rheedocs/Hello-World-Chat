@@ -8,6 +8,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import java.net.ConnectException;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.NoSuchElementException;
@@ -102,7 +103,8 @@ public class ChatClient {
                 handleChatLoop(inputQueue, connectionLost, out);
             }
             stopInputThread(inputThread);
-
+        } catch (ConnectException e) {
+            System.err.println("Kunne ikke forbinde til serveren på " + host + ":" + port + ". Kører serveren?");
         } catch (IOException e) {
             System.err.println("Clientfejl: " + e.getMessage());
         }
