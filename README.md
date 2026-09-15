@@ -74,20 +74,20 @@ Eksempler:
 ```
 
 Filoverførsel tilføjer fire nye beskedtyper:
- 
+
 Klient til server:
 ```
 LISTFILES||
 GETFILE|eldenring.txt|
 ```
- 
+
 Server til klient:
 ```
 2026-09-25 12:03:00|FILELIST|server|bob|eldenring.txt,readme.md
 2026-09-25 12:04:00|FILEDATA|server|bob|eldenring.txt|SGVqIGZyYSBzZXJ2ZXJlbg==
 2026-09-25 12:05:00|FILEERROR|server|bob|Filen findes ikke
 ```
- 
+
 FILEDATA's payload er selv opdelt i to dele adskilt af en ekstra pipe, filnavn og Base64-kodet indhold.
  
 ---
@@ -101,64 +101,67 @@ config:
 ---
 classDiagram
     class Message {
-      -String type
-      -String target
-      -String payload
-      +getType() String
-      +getTarget() String
-      +getPayload() String
+        -String type
+        -String target
+        -String payload
+        +getType() String
+        +getTarget() String
+        +getPayload() String
     }
     class MessageParser {
-      +parseClientMessage(raw) Message
-      +parseServerMessage(raw) Message
-      +formatClientMessage(type, target, payload) String
-      +formatServerMessage(type, sender, target, payload) String
+        +TYPE_LOGIN, TYPE_TEXT, TYPE_QUIT ... String
+        +parseClientMessage(raw) Message
+        +parseServerMessage(raw) Message
+        +formatClientMessage(type, target, payload) String
+        +formatServerMessage(type, sender, target, payload) String
     }
     class MessageSender {
-      <<interface>>
-      +getUsername() String
-      +sendServerMessage(type, sender, target, payload)
+        <<interface>>
+        +getUsername() String
+        +sendServerMessage(type, sender, target, payload)
     }
     class ChatServer {
-      -ExecutorService clientPool
-      -ClientRegistry clientRegistry
-      -ChatRoomManager chatRoomManager
-      +main(args)
+        -ExecutorService clientPool
+        -ClientRegistry clientRegistry
+        -ChatRoomManager chatRoomManager
+        +main(args)
     }
     class ClientHandler {
-      -Socket socket
-      -String username
-      -String currentRoom
-      +run()
-      +sendServerMessage(type, sender, target, payload)
+        -Socket socket
+        -String username
+        -String currentRoom
+        +run()
+        +sendServerMessage(type, sender, target, payload)
+        -requireLogin() boolean
     }
     class ClientRegistry {
-      -Map~String,MessageSender~ clients
-      +register(username, client) boolean
-      +unregister(username)
-      +getClient(username) MessageSender
+        -Map~String,MessageSender~ clients
+        +register(username, client) boolean
+        +unregister(username)
+        +getClient(username) MessageSender
     }
     class ChatRoomManager {
-      -Map~String,Set~ roomMembers
-      +addUserToRoom(username, room)
-      +moveUserToRoom(username, room)
-      +removeUser(username)
-      +getMembers(room) Set
-      +getUserRoom(username) String
-      +getRoomNameForTarget(target) String
+        -Map~String,Set~ roomMembers
+        +addUserToRoom(username, room)
+        +moveUserToRoom(username, room)
+        +removeUser(username)
+        +getMembers(room) Set
+        +getUserRoom(username) String
+        +getRoomNameForTarget(target) String
     }
     class ServerFileRepository {
-      -Path rootDirectory
-      +listFiles() List
-      +readFile(fileName) byte[]
+        -Path rootDirectory
+        +listFiles() List
+        +readFile(fileName) byte[]
+        +containsFile(fileName) boolean
     }
     class ChatClient {
-      +main(args)
+        +main(args)
     }
     class ServerListener {
-      -BufferedReader input
-      -Socket socket
-      +run()
+        -BufferedReader input
+        -Socket socket
+        +run()
     }
 
     ClientHandler ..|> MessageSender : implementerer
@@ -169,11 +172,11 @@ classDiagram
     ChatServer --> ClientHandler : opretter én pr. klient
     ChatServer --> ClientRegistry : ejer
     ChatServer --> ChatRoomManager : ejer
-    ClientRegistry o--> MessageSender : holder liste af tilsluttede
-    ChatClient --> ServerListener : starter i egen tråd
-    ChatClient ..> MessageParser : bruger til at formatere
-    ServerListener ..> MessageParser : bruger til at parse svar
-    MessageParser ..> Message : opretter
+ClientRegistry o--> MessageSender : holder liste af tilsluttede
+ChatClient --> ServerListener : starter i egen tråd
+ChatClient ..> MessageParser : bruger til at formatere
+ServerListener ..> MessageParser : bruger til at parse svar
+MessageParser ..> Message : opretter
 ```
 
 **Relationstyper brugt i diagrammet:**
@@ -182,6 +185,7 @@ classDiagram
 - `-->` (fuld pil), **association**, én klasse bruger/kender til en anden, typisk gennem et felt eller metodekald
 - `..>` (stiplet pil), **afhængighed**, én klasse bruger en anden kortvarigt (fx som parameter eller lokalt kald), uden at holde en permanent reference
 - `o-->` (fuld pil med åben diamant), **aggregation**, `ClientRegistry` *holder* en samling af `MessageSender`-objekter over tid, ikke bare et engangskald, diamanten sidder ved den klasse der "ejer" samlingen (`ClientRegistry`)
+
 ## Pakkestruktur
 
 Koden er organiseret i fire pakker efter ansvar:
@@ -193,11 +197,13 @@ Koden er organiseret i fire pakker efter ansvar:
 
 Afhængighederne går i én retning, domain har ingen afhængigheder til de andre pakker, protocol afhænger kun af domain, mens server og client begge afhænger af domain og protocol, men ikke af hinanden.
 
+Alle beskedtyper er samlet som konstanter i `MessageParser`, så klient og server altid bruger præcis de samme strenge.
+
 Testfilerne følger samme pakkeinddeling som den kode de tester.
 
 ## Trådmodel og delte ressourcer
 
-Serveren bruger en `ExecutorService` med en fast trådpulje (3 tråde) til at håndtere flere samtidige klienter. Hver forbundet klient får sin egen `ClientHandler`-instans, som kører som en opgave i trådpuljen og håndterer al kommunikation med netop den klient, uafhængigt af de andre.
+Serveren bruger en `ExecutorService` med en fast trådpulje (3 tråde) til at håndtere flere samtidige klienter. Det betyder også, at en fjerde klient godt kan forbinde, men først bliver betjent, når en af de tre andre logger ud. Hver forbundet klient får sin egen `ClientHandler`-instans, som kører som en opgave i trådpuljen og håndterer al kommunikation med netop den klient, uafhængigt af de andre.
 
 To samlinger deles mellem alle disse tråde samtidig:
 
@@ -210,7 +216,9 @@ To samlinger deles mellem alle disse tråde samtidig:
 - En separat input-tråd læser brugerens tastatur-input og lægger linjerne i en `BlockingQueue`, så hovedtråden ikke behøver blokere uendeligt på brugerinput
 - `ServerListener` kører i sin egen tråd og læser løbende beskeder fra serveren
 
-Hovedtråden henter fra input-køen med en kort timeout (500ms) i stedet for at blokere permanent. Det gør det muligt at tjekke en delt `AtomicBoolean` (`connectionLost`), som `ServerListener` sætter hvis forbindelsen til serveren tabes. Dermed opdager klienten en død server proaktivt, indenfor cirka et sekund, selv hvis brugeren ikke skriver noget.
+Hovedtråden henter fra input-køen med en kort timeout (500ms) i stedet for at blokere permanent. Det gør det muligt at tjekke en delt `AtomicBoolean` (`connectionLost`), som `ServerListener` sætter hvis forbindelsen til serveren tabes. Dermed opdager klienten en død server proaktivt, indenfor cirka et sekund, selv hvis brugeren ikke skriver noget. Det samme mønster bruges under login, både mens klienten venter på et brugernavn og mens den venter på svar fra serveren.
+
+Vi fandt to fejl her ved manuel test, som hverken unit tests eller Copilot fangede. Klienten hang efter `/quit`, indtil man trykkede Enter, fordi lukningen af `Scanner` ventede på input-tråden, der stadig læste fra `System.in`. Vi lukker derfor bevidst ikke `Scanner`, input-tråden er en daemon-tråd og stopper sammen med programmet. Derudover hang klienten for evigt, hvis serveren blev lukket, mens man stod ved "Indtast brugernavn", fordi login brugte `take()` uden at tjekke `connectionLost`. Det bruger nu også `poll` med timeout.
 
 Vi stødte undervejs på en konkret race condition, hovedtråden forsøgte oprindeligt selv at læse et svar fra serveren synkront efter at have sendt QUIT, samtidig med at `ServerListener` allerede læste fra den samme stream i baggrunden. To tråde der læser fra samme socket samtidig gav uforudsigelige resultater. Løsningen var at lade `ServerListener` alene stå for al læsning fra serveren, hovedtråden sender kun beskeder, den læser aldrig selv fra streamen.
 
@@ -226,15 +234,20 @@ Serveren har en ny klasse, `ServerFileRepository`, som håndterer sikker fillæs
 
 Klienten understøtter to nye slash-kommandoer, `/list` for at se filer på serveren, og `/get <filnavn>` for at hente en fil. Modtagne filer afkodes fra Base64 og gemmes i en lokal `downloads/`-mappe, med samme canonical path-sikkerhed på klientsiden, så en ondsindet server ikke kan narre klienten til at skrive filer udenfor den tilladte mappe.
 
-Vi opdagede undervejs, gennem et eksternt code review, at filnavne med et pipe-tegn (`|`) kunne forvirre parsingen af `FILEDATA`-svaret (som har formatet `filnavn|base64data`). Vi rettede det ved eksplicit at afvise filnavne med `|` i `GETFILE`-håndteringen.
+Vi opdagede undervejs, gennem et eksternt code review, at filnavne med et pipe-tegn (`|`) kunne forvirre parsingen af `FILEDATA`-svaret (som har formatet `filnavn|base64data`). Vi tilføjede derfor en eksplicit afvisning af `|` i `GETFILE`-håndteringen. Senere fandt vi ud af, at parseren allerede forhindrer det, da den kun splitter i tre felter, så filnavnet (target) aldrig kan indeholde en pipe. Tjekket er beholdt som en ekstra sikring, hvis parseren ændres.
 
 ## AI-dokumentation
 
 | Opgave | AI-værktøj | AI's forslag | Vores vurdering og ændringer | Kontrol og test |
 |---|---|---|---|---|
 | QUIT-bekræftelse | GitHub Copilot | Klienten skulle selv læse serverens svar synkront efter at have sendt QUIT | Afvist, det skabte en race condition da ServerListener allerede læste fra samme stream i baggrunden. Rettet til at lade ServerListener alene stå for al læsning | Testet manuelt flere gange i træk, bekræftet konsistent efter rettelsen |
-| Filnavnevalidering i GETFILE | Claude (eksternt review) | Filnavne med `\|` kunne forvirre parsingen af FILEDATA-payloaden | Fulgt, tilføjede eksplicit afvisning af `\|` i filnavne før filen læses | Testet med et filnavn indeholdende `\|`, bekræftet korrekt FILEERROR |
-| Unit-tests for ServerFileRepository | GitHub Copilot | Første version brugte Mockito til at mocke selve filsystemet | Afvist, det beviste kun at koden kaldte de rigtige metoder, ikke at den faktisk virkede. Bad om at få dem omskrevet til ægte @TempDir-tests med rigtige filer | Kørt, 26 tests bestået, inklusiv et reelt path traversal-forsøg mod en fysisk fil |
+| Filnavnevalidering i GETFILE | Claude (eksternt review) | Filnavne med `\|` kunne forvirre parsingen af FILEDATA-payloaden | Fulgt, tilføjede eksplicit afvisning af `\|` i filnavne før filen læses. Senere opdaget at parseren allerede forhindrer det, så tjekket er en ekstra sikring | Ved gennemgang af testene fandt vi, at tjekket ikke kan nås via protokollen, fordi target aldrig indeholder `\|` |
+| Unit-tests for ServerFileRepository | GitHub Copilot | Første version brugte Mockito til at mocke selve filsystemet | Afvist, det beviste kun at koden kaldte de rigtige metoder, ikke at den faktisk virkede. Bad om at få dem omskrevet til ægte @TempDir-tests med rigtige filer | Kørt og bestået, inklusiv et path traversal-forsøg mod den rigtige mappe |
+
+| Test af ChatServer | GitHub Copilot | En test der mockede `Files.isDirectory` til at returnere `true` og derefter tjekkede, at den returnerede `true` | Afvist, testen kunne aldrig fejle. Omskrevet til at tjekke, at mappen oprettes når den mangler, og ikke oprettes når den findes | Begge tests kørt og bestået |
+| Clean code og metodeopdeling | GitHub Copilot | Opdeling af `handleChatLoop`, `handleGetFile` og `ServerListener.run` i mindre metoder | Fulgt, men én metode ad gangen med commit efter hver. Copilot rapporterede én gang en ændring, den ikke havde lavet, og introducerede en fejl, så `/QUIT` med store bogstaver ikke lukkede klienten | Tjekket med `git diff` og manuel test af alle quit-varianter før commit |
+| Samling af protokoltyper i MessageParser | GitHub Copilot | Flytte alle beskedtyper til fælles konstanter og fjerne gentaget login-tjek | Copilot stoppede midt i opgaven, da kvoten var brugt. Vi kasserede de halve ændringer med `git restore` og lavede dem færdige med Claude i stedet | 79 unit tests og fuld manuel regressionstest bestået |
+| Hængende klient ved lukning og login | Ingen, fundet ved manuel test | | Rettet selv, se afsnittet om trådmodel | Testet ved at lukke serveren under login og køre `/quit` uden at trykke Enter bagefter |
 
 ## Test
 
@@ -250,6 +263,16 @@ Vi opdagede undervejs, gennem et eksternt code review, at filnavne med et pipe-t
 | /get på en eksisterende fil | Filen downloades og matcher originalen | Bestået |
 | /get på en ukendt fil | FILEERROR vises til brugeren | Bestået |
 | /get med path traversal-forsøg (fx ../pom.xml) | Afvist af ServerFileRepositorys sikkerhedstjek | Bestået |
+| /list med skjulte filer i server_files | Filer som .gitkeep vises ikke | Bestået |
+| /quit, /QUIT, quit\| og QUIT\| | Klienten lukker med det samme uden ekstra Enter | Bestået |
+| Serveren lukkes, mens klienter chatter | Alle klienter viser "Forbindelsen til serveren blev afbrudt." og lukker selv | Bestået |
+| Serveren lukkes, mens en klient venter på brugernavn | Klienten opdager det og lukker selv | Bestået |
+
+### Unit tests
+
+Der er 79 unit tests fordelt på otte testklasser. Testnavnene følger `metode_scenarie_forventetResultat`, og alle tests er skrevet efter Arrange, Act, Assert. Ud over happy path tester vi grænsetilfælde som null, tomme værdier og payloads med pipes, samt fejlscenarier som path traversal, optagede brugernavne og ukendte kommandoer.
+
+Vi mocker kun det, der ligger uden for klassen, vi tester. `ClientHandlerTest` mocker `Socket` og `ServerFileRepository`, så serverens protokollogik kan testes uden netværk og filsystem. `ServerFileRepositoryTest` mocker derimod ikke, fordi klassens eneste ansvar er filsystemet, så den testes mod rigtige filer i en `@TempDir`. `ClientRegistryTest` har en test, hvor 20 tråde prøver at registrere samme brugernavn samtidig, og kun én må lykkes, så vores `putIfAbsent`-løsning er dækket af en automatisk test.
 
 ## Sekvensdiagram
 
@@ -293,14 +316,14 @@ sequenceDiagram
    participant Repo as ServerFileRepository
 
    Client->>+Handler: GETFILE|eldenring.txt|
-   Note right of Handler: username != null<br/>fileName indeholder ikke "|"
+   Note right of Handler: requireLogin()<br/>validateRequestedFile(fileName)
 
    Handler->>+Repo: readFile("eldenring.txt")
    Note right of Repo: resolveSafeFilePath(fileName)
 
    alt Fil findes
        Repo-->>-Handler: byte[] data
-       Handler->>Handler: Base64.getEncoder().encodeToString(data)
+       Handler->>Handler: sendFileDataResponse(fileName, data)<br/>Base64-koder indholdet
        Handler-->>Client: FILEDATA|server|bob|eldenring.txt|<base64>
        Note right of Client: ServerListener læser svaret<br/>afkoder Base64, gemmer i downloads/
    else Fil findes ikke
