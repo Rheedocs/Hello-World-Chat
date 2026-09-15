@@ -193,6 +193,8 @@ Koden er organiseret i fire pakker efter ansvar:
 
 Testfilerne følger samme pakkeinddeling som den kode de tester.
 
+Afhængighederne går i én retning, domain har ingen afhængigheder til de andre pakker, protocol afhænger kun af domain, mens server og client begge afhænger af domain og protocol, men ikke af hinanden.
+
 ## Trådmodel og delte ressourcer
 
 Serveren bruger en `ExecutorService` med en fast trådpulje (3 tråde) til at håndtere flere samtidige klienter. Hver forbundet klient får sin egen `ClientHandler`-instans, som kører som en opgave i trådpuljen og håndterer al kommunikation med netop den klient, uafhængigt af de andre.
