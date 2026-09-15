@@ -1,96 +1,79 @@
 package server;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
+import org.junit.jupiter.api.io.TempDir;
 
 public class ServerFileRepositoryTest {
 
     @Test
-    public void listFilesShouldReturnOnlyRegularFiles() throws IOException {
-        // Arrange
-        Path rootDirectory = Paths.get("/fake/root");
-        Path rootNormalized = rootDirectory.toAbsolutePath().normalize();
-        Path fileA = rootNormalized.resolve("a.txt");
-        Path fileB = rootNormalized.resolve("b.txt");
-        Path subDir = rootNormalized.resolve("submap");
+    public void listFilesShouldReturnOnlyRegularFiles(@TempDir Path tempDir) throws IOException {
+        Path fileA = tempDir.resolve("a.txt");
+        Path fileB = tempDir.resolve("b.txt");
+        Path subDir = tempDir.resolve("submap");
 
-        try (MockedStatic<Files> files = Mockito.mockStatic(Files.class)) {
-            files.when(() -> Files.isDirectory(rootNormalized)).thenReturn(true);
-            files.when(() -> Files.list(rootNormalized)).thenReturn(Stream.of(fileB, fileA, subDir));
-            files.when(() -> Files.isRegularFile(fileA)).thenReturn(true);
-            files.when(() -> Files.isRegularFile(fileB)).thenReturn(true);
-            files.when(() -> Files.isRegularFile(subDir)).thenReturn(false);
+        Files.writeString(fileA, "A");
+        Files.writeString(fileB, "B");
+        Files.createDirectories(subDir);
 
-            // Act
-            ServerFileRepository repository = new ServerFileRepository(rootDirectory);
-            List<String> result = repository.listFiles();
+        ServerFileRepository repository = new ServerFileRepository(tempDir);
 
-            // Assert
-            assertEquals(List.of("a.txt", "b.txt"), result);
-        }
+        List<String> result = repository.listFiles();
+
+        assertEquals(List.of("a.txt", "b.txt"), result);
     }
 
     @Test
-    public void readFileShouldReturnFileContent() throws IOException {
-        // Arrange
-        Path rootDirectory = Paths.get("/fake/root");
-        Path rootNormalized = rootDirectory.toAbsolutePath().normalize();
-        Path hello = rootNormalized.resolve("hello.txt");
-        byte[] bytes = "Hej fra serveren".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    public void readFileShouldReturnFileContent(@TempDir Path tempDir) throws IOException {
+        Path hello = tempDir.resolve("hello.txt");
+        Files.writeString(hello, "Hej fra serveren", StandardCharsets.UTF_8);
 
-        try (MockedStatic<Files> files = Mockito.mockStatic(Files.class)) {
-            files.when(() -> Files.isDirectory(rootNormalized)).thenReturn(true);
-            files.when(() -> Files.isRegularFile(hello)).thenReturn(true);
-            files.when(() -> Files.readAllBytes(hello)).thenReturn(bytes);
+        ServerFileRepository repository = new ServerFileRepository(tempDir);
 
-            ServerFileRepository repository = new ServerFileRepository(rootDirectory);
-
-            // Act & Assert
-            assertEquals("Hej fra serveren", new String(repository.readFile("hello.txt"), java.nio.charset.StandardCharsets.UTF_8));
-        }
+        assertEquals("Hej fra serveren", new String(repository.readFile("hello.txt"), StandardCharsets.UTF_8));
     }
 
     @Test
-    public void readFileShouldRejectPathTraversal() throws IOException {
-        // Arrange
-        Path rootDirectory = Paths.get("/fake/root");
-        Path rootNormalized = rootDirectory.toAbsolutePath().normalize();
-        try (MockedStatic<Files> files = Mockito.mockStatic(Files.class)) {
-            files.when(() -> Files.isDirectory(rootNormalized)).thenReturn(true);
+    public void containsFileShouldReturnTrueForRealFilesAndFalseForTraversalAttempt(@TempDir Path tempDir) throws IOException {
+        Path realFile = tempDir.resolve("keep.txt");
+        Files.writeString(realFile, "gemt", StandardCharsets.UTF_8);
 
-            ServerFileRepository repository = new ServerFileRepository(rootDirectory);
+        ServerFileRepository repository = new ServerFileRepository(tempDir);
 
-            // Act & Assert
-            assertThrows(SecurityException.class, () -> repository.readFile("../secret.txt"));
-        }
+        assertTrue(repository.containsFile("keep.txt"));
+        assertFalse(repository.containsFile("missing.txt"));
+        assertFalse(repository.containsFile("../outside.txt"));
     }
 
     @Test
-    public void readFileShouldRejectMissingFile() throws IOException {
-        // Arrange
-        Path rootDirectory = Paths.get("/fake/root");
-        Path rootNormalized = rootDirectory.toAbsolutePath().normalize();
-        Path missing = rootNormalized.resolve("missing.txt");
-
-        try (MockedStatic<Files> files = Mockito.mockStatic(Files.class)) {
-            files.when(() -> Files.isDirectory(rootNormalized)).thenReturn(true);
-            files.when(() -> Files.isRegularFile(missing)).thenReturn(false);
-
-            ServerFileRepository repository = new ServerFileRepository(rootDirectory);
-
-            // Act & Assert
-            assertThrows(IOException.class, () -> repository.readFile("missing.txt"));
+    public void readFileShouldRejectPathTraversal(@TempDir Path tempDir) {
+        Path outsideFile = tempDir.getParent().resolve("outside-secret.txt");
+        try {
+            Files.writeString(outsideFile, "hemmeligt", StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalStateException("Kunne ikke oprette fil udenfor temp-mappen til traversal-test", e);
         }
+
+        ServerFileRepository repository = new ServerFileRepository(tempDir);
+
+        assertThrows(SecurityException.class, () -> repository.readFile("../outside-secret.txt"));
+        assertFalse(repository.containsFile("../outside-secret.txt"));
+    }
+
+    @Test
+    public void readFileShouldRejectMissingFile(@TempDir Path tempDir) {
+        ServerFileRepository repository = new ServerFileRepository(tempDir);
+
+        assertThrows(IOException.class, () -> repository.readFile("missing.txt"));
     }
 }
