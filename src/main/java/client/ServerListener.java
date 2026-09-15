@@ -11,6 +11,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import protocol.MessageParser;
 
+/**
+ * Lytter på indkommende serverbeskeder og formaterer dem for menneskelæselig visning i klienten.
+ * Klassen håndterer også fil-listing og download af data fra serveren med sikkerhedstjek mod path traversal.
+ */
 public class ServerListener implements Runnable {
     private final BufferedReader input;
     private final Socket socket;
@@ -18,15 +22,24 @@ public class ServerListener implements Runnable {
     private final java.util.concurrent.BlockingQueue<String> serverMessages;
     private final AtomicBoolean loginPhase;
 
+    /**
+     * Opretter en listener uden en tilknyttet message-queue.
+     */
     public ServerListener(BufferedReader input, Socket socket, AtomicBoolean connectionLost) {
         this(input, socket, connectionLost, null, new AtomicBoolean(true));
     }
 
+    /**
+     * Opretter en listener, der gemmer indkommende serverbeskeder i en queue under loginfasen.
+     */
     public ServerListener(BufferedReader input, Socket socket, AtomicBoolean connectionLost,
             java.util.concurrent.BlockingQueue<String> serverMessages) {
         this(input, socket, connectionLost, serverMessages, new AtomicBoolean(true));
     }
 
+    /**
+     * Opretter en listener med alle nødvendige flags for login- og chatfase.
+     */
     public ServerListener(BufferedReader input, Socket socket, AtomicBoolean connectionLost,
             java.util.concurrent.BlockingQueue<String> serverMessages, AtomicBoolean loginPhase) {
         this.input = input;
@@ -36,6 +49,9 @@ public class ServerListener implements Runnable {
         this.loginPhase = loginPhase;
     }
 
+    /**
+     * Læser hele tiden serverkommunikationen og viser den i et læsbart format for brugeren.
+     */
     @Override
     public void run() {
         try {

@@ -9,10 +9,17 @@ import java.util.Objects;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Stream;
 
+/**
+ * Holder serverens delte filkatalog og beskytter læsning af filer mod path traversal og samtidige adgangsfejl.
+ * Klassen bruges til at liste filer og hente bestemt indhold inden for den godkendte rodmappe.
+ */
 public class ServerFileRepository {
     private final Path rootDirectory;
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
+    /**
+     * Opretter en repository, der er låst til en konkret rodmappe og validerer, at den faktisk er en mappe.
+     */
     public ServerFileRepository(Path rootDirectory) {
         this.rootDirectory = Objects.requireNonNull(rootDirectory, "Rodmappen kan ikke være null.").toAbsolutePath().normalize();
         if (!Files.isDirectory(this.rootDirectory)) {
@@ -20,6 +27,9 @@ public class ServerFileRepository {
         }
     }
 
+    /**
+     * Returnerer alle almindelige filer i rodmappen sorteret alfabetisk.
+     */
     public List<String> listFiles() throws IOException {
         lock.readLock().lock();
         try (Stream<Path> files = Files.list(rootDirectory)) {
@@ -33,6 +43,9 @@ public class ServerFileRepository {
         }
     }
 
+    /**
+     * Læser indholdet af en sikker fil i rodmappen og returnerer det som bytes.
+     */
     public byte[] readFile(String fileName) throws IOException {
         Path filePath = resolveSafeFilePath(fileName);
 
@@ -47,6 +60,9 @@ public class ServerFileRepository {
         }
     }
 
+    /**
+     * Returnerer sandt, hvis den angivne fil findes inde i rodmappen og er en almindelig fil.
+     */
     public boolean containsFile(String fileName) {
         try {
             Path filePath = resolveSafeFilePath(fileName);
@@ -62,6 +78,7 @@ public class ServerFileRepository {
         }
 
         Path candidate = rootDirectory.resolve(fileName).normalize();
+        // Vi sammenligner med den absoluttere rodmappe for at afvise path traversal som ../outside.txt.
         if (!candidate.startsWith(rootDirectory)) {
             throw new SecurityException("Adgang til filen er ikke tilladt: " + fileName);
         }

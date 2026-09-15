@@ -18,6 +18,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import protocol.MessageParser;
 
+/**
+ * Klienten opretter forbindelsen til serveren, håndterer login og sender eller modtager chatbeskeder.
+ * Klassen holder også styr på lokale slash-kommander, som ikke skal sendes videre til serveren.
+ */
 public class ChatClient {
     private static final String DEFAULT_HOST = "localhost";
     private static final int DEFAULT_PORT = 5000;
@@ -33,6 +37,9 @@ public class ChatClient {
     private static final String MESSAGE_TYPE_ERROR = "ERROR";
     private static final String DEFAULT_ROOM = "all";
 
+    /**
+     * Starter klienten, opretter forbindelse til serveren, logger brugeren ind og går ind i chat-løkken.
+     */
     public static void main(String[] args) {
         configureUtf8Console();
 

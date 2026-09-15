@@ -15,6 +15,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Base64;
 
+/**
+ * Håndterer én klientforbindelse fra login til chat, rum, private beskeder og filoperationer.
+ * Klassen parser og distribuerer hver modtagen protokolbesked for den konkrete klient.
+ */
 public class ClientHandler implements Runnable, MessageSender {
     private static final String MESSAGE_TYPE_LOGIN = "LOGIN";
     private static final String MESSAGE_TYPE_JOIN_ROOM = "JOIN_ROOM";
@@ -36,6 +40,9 @@ public class ClientHandler implements Runnable, MessageSender {
     private String currentRoom;
     private boolean connected = true;
 
+    /**
+     * Opretter en handler til en konkret socket og binder den til de delte serverregistre.
+     */
     public ClientHandler(Socket socket, ClientRegistry clientRegistry, ChatRoomManager chatRoomManager, ServerFileRepository fileRepository) throws IOException {
         this.socket = socket;
         this.clientRegistry = clientRegistry;
@@ -45,11 +52,17 @@ public class ClientHandler implements Runnable, MessageSender {
         this.output = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
     }
 
+    /**
+     * Returnerer det aktuelle brugernavn for denne klient, hvis den allerede er logget ind.
+     */
     @Override
     public String getUsername() {
         return username;
     }
 
+    /**
+     * Læser klientens meddelelser i en løkke og håndterer hver enkelt protokolbesked.
+     */
     @Override
     public void run() {
         try {
@@ -68,6 +81,9 @@ public class ClientHandler implements Runnable, MessageSender {
         }
     }
 
+    /**
+     * Sender en server-besked tilbage til den tilknyttede klient i standard protokolformat.
+     */
     public void sendServerMessage(String type, String sender, String target, String payload) {
         output.println(MessageParser.formatServerMessage(type, sender, target, payload));
     }

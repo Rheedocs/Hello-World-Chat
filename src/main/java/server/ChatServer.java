@@ -14,6 +14,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Starter chatserveren og accepterer klientforbindelser i en fast trådpulje.
+ * Serveren holder styr på registrerede brugere, chatrum og filoverførsel i den delte mappe.
+ */
 public class ChatServer {
     private static final int DEFAULT_PORT = 5000;
     private static final int THREAD_POOL_SIZE = 3;
@@ -23,16 +27,26 @@ public class ChatServer {
     private static final ClientRegistry clientRegistry = new ClientRegistry();
     private static final ChatRoomManager chatRoomManager = new ChatRoomManager();
 
+    /**
+     * Returnerer den delte filmappe, som serveren bruger til list/get-operationer.
+     */
     public static Path getSharedFilesDirectory() {
         return SHARED_FILES_DIRECTORY;
     }
 
+    /**
+     * Opretter den delte filmappe, hvis den endnu ikke findes på disken.
+     */
     public static void ensureSharedFilesDirectoryExists() throws IOException {
         if (Files.notExists(SHARED_FILES_DIRECTORY)) {
+            // Mappen oprettes én gang ved start, så alle klienter deler samme filkatalog.
             Files.createDirectories(SHARED_FILES_DIRECTORY);
         }
     }
 
+    /**
+     * Starter serveren, opretter filrepository og accepterer klientforbindelser i en uendelig løkke.
+     */
     public static void main(String[] args) {
         configureUtf8Console();
 
