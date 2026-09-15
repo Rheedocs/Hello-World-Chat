@@ -1,4 +1,3 @@
-
 package server;
 
 import java.util.Collections;
@@ -11,9 +10,8 @@ import java.util.concurrent.ConcurrentMap;
  * Klassen flytter brugere mellem rum og finder deres aktuelle medlemskab uden brug af almindelige ikke-synkroniserede samlinger.
  */
 public class ChatRoomManager {
-    private static final String DEFAULT_ROOM_NAME = "lobby";
+    public static final String DEFAULT_ROOM = "lobby";
     private static final String ALL_TARGET = "all";
-    public static final String DEFAULT_ROOM = DEFAULT_ROOM_NAME;
 
     private final ConcurrentMap<String, Set<String>> roomMembers = new ConcurrentHashMap<>();
 
@@ -56,13 +54,7 @@ public class ChatRoomManager {
         String currentRoom = findRoomForUser(username);
 
         if (currentRoom != null && !currentRoom.equals(targetRoom)) {
-            Set<String> currentMembers = roomMembers.get(currentRoom);
-            if (currentMembers != null) {
-                currentMembers.remove(username);
-                if (currentMembers.isEmpty()) {
-                    roomMembers.remove(currentRoom, currentMembers);
-                }
-            }
+            removeUserFromRoom(username, currentRoom);
         }
 
         addUserToRoom(username, targetRoom);
@@ -81,13 +73,7 @@ public class ChatRoomManager {
             return;
         }
 
-        Set<String> members = roomMembers.get(room);
-        if (members != null) {
-            members.remove(username);
-            if (members.isEmpty()) {
-                roomMembers.remove(room, members);
-            }
-        }
+        removeUserFromRoom(username, room);
     }
 
     /**
@@ -112,6 +98,17 @@ public class ChatRoomManager {
             return DEFAULT_ROOM;
         }
         return normalizeRoom(target);
+    }
+
+    private void removeUserFromRoom(String username, String roomName) {
+        Set<String> members = roomMembers.get(roomName);
+        if (members != null) {
+            members.remove(username);
+            // remove(key, value) sletter kun rummet, hvis det stadig er det samme tomme sæt.
+            if (members.isEmpty()) {
+                roomMembers.remove(roomName, members);
+            }
+        }
     }
 
     private String normalizeRoom(String roomName) {

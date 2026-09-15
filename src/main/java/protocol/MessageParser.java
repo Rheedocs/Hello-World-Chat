@@ -1,4 +1,3 @@
-
 package protocol;
 
 import java.time.LocalDateTime;
@@ -16,7 +15,16 @@ public class MessageParser {
     private static final int CLIENT_MESSAGE_PART_COUNT = 3;
     private static final int SERVER_MESSAGE_PART_COUNT = 5;
 
-    // Filoverførsel bruger disse protokolvertyper i klient/server-kommunikationen.
+    // Fælles protokoltyper, så klient og server bruger præcis de samme strenge.
+    public static final String TYPE_LOGIN = "LOGIN";
+    public static final String TYPE_JOIN_ROOM = "JOIN_ROOM";
+    public static final String TYPE_TEXT = "TEXT";
+    public static final String TYPE_PRIVATE = "PRIVATE";
+    public static final String TYPE_QUIT = "QUIT";
+    public static final String TYPE_OK = "OK";
+    public static final String TYPE_ERROR = "ERROR";
+
+    // Filoverførsel bruger disse protokoltyper i klient/server-kommunikationen.
     public static final String TYPE_LIST_FILES = "LISTFILES";
     public static final String TYPE_GET_FILE = "GETFILE";
     public static final String TYPE_FILE_LIST = "FILELIST";

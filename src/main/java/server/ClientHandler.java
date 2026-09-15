@@ -1,4 +1,3 @@
-
 package server;
 
 import domain.Message;
@@ -12,21 +11,14 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.Base64;
+import java.util.List;
 
 /**
  * Håndterer én klientforbindelse fra login til chat, rum, private beskeder og filoperationer.
  * Klassen parser og distribuerer hver modtagen protokolbesked for den konkrete klient.
  */
 public class ClientHandler implements Runnable, MessageSender {
-    private static final String MESSAGE_TYPE_LOGIN = "LOGIN";
-    private static final String MESSAGE_TYPE_JOIN_ROOM = "JOIN_ROOM";
-    private static final String MESSAGE_TYPE_TEXT = "TEXT";
-    private static final String MESSAGE_TYPE_PRIVATE = "PRIVATE";
-    private static final String MESSAGE_TYPE_QUIT = "QUIT";
-    private static final String MESSAGE_TYPE_OK = "OK";
-    private static final String MESSAGE_TYPE_ERROR = "ERROR";
     private static final String SERVER_USER = "server";
     private static final String TARGET_ALL = "all";
 
@@ -94,20 +86,20 @@ public class ClientHandler implements Runnable, MessageSender {
             String type = message.getType().toUpperCase();
 
             switch (type) {
-                case MESSAGE_TYPE_LOGIN:
+                case MessageParser.TYPE_LOGIN:
                     handleLogin(message);
                     break;
-                case MESSAGE_TYPE_JOIN_ROOM:
+                case MessageParser.TYPE_JOIN_ROOM:
                     handleJoinRoom(message);
                     break;
-                case MESSAGE_TYPE_TEXT:
+                case MessageParser.TYPE_TEXT:
                     handleText(message);
                     break;
-                case MESSAGE_TYPE_PRIVATE:
+                case MessageParser.TYPE_PRIVATE:
                     handlePrivate(message);
                     break;
-                case MESSAGE_TYPE_QUIT:
-                    sendServerMessage(MESSAGE_TYPE_OK, SERVER_USER, username == null ? "" : username, "Du er nu logget ud.");
+                case MessageParser.TYPE_QUIT:
+                    sendServerMessage(MessageParser.TYPE_OK, SERVER_USER, currentTarget(), "Du er nu logget ud.");
                     disconnect();
                     break;
                 case MessageParser.TYPE_LIST_FILES:
@@ -117,43 +109,59 @@ public class ClientHandler implements Runnable, MessageSender {
                     handleGetFile(message);
                     break;
                 default:
-                    sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, username == null ? "" : username, "Ukendt kommando: " + type);
+                    sendServerMessage(MessageParser.TYPE_ERROR, SERVER_USER, currentTarget(), "Ukendt kommando: " + type);
                     break;
             }
         } catch (IllegalArgumentException e) {
-            String target = username == null ? "" : username;
-            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, target, e.getMessage());
+            sendServerMessage(MessageParser.TYPE_ERROR, SERVER_USER, currentTarget(), e.getMessage());
         }
+    }
+
+    /**
+     * Sender en fejl og returnerer false, hvis klienten ikke er logget ind endnu.
+     */
+    private boolean requireLogin() {
+        if (username == null) {
+            sendServerMessage(MessageParser.TYPE_ERROR, SERVER_USER, "", "Du skal logge ind først.");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Returnerer brugernavnet som modtager, eller en tom streng før login.
+     */
+    private String currentTarget() {
+        return username == null ? "" : username;
     }
 
     private void handleLogin(Message message) {
         String requestedUsername = message.getPayload();
         if (requestedUsername == null || requestedUsername.isBlank()) {
-            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, "", "Brugernavnet kan ikke være tomt.");
+            sendServerMessage(MessageParser.TYPE_ERROR, SERVER_USER, "", "Brugernavnet kan ikke være tomt.");
             return;
         }
 
         if (!clientRegistry.register(requestedUsername, this)) {
-            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, requestedUsername, "Brugernavnet er optaget.");
+            sendServerMessage(MessageParser.TYPE_ERROR, SERVER_USER, requestedUsername, "Brugernavnet er optaget.");
             return;
         }
 
         username = requestedUsername;
         currentRoom = chatRoomManager.getDefaultRoom();
         chatRoomManager.addUserToRoom(username, currentRoom);
-        sendServerMessage(MESSAGE_TYPE_OK, SERVER_USER, username, "");
+        sendServerMessage(MessageParser.TYPE_OK, SERVER_USER, username, "");
         System.out.println("Brugeren " + username + " loggede ind i rummet " + currentRoom + ".");
     }
 
     private void handleJoinRoom(Message message) {
-        if (username == null) {
-            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, "", "Du skal logge ind først.");
+        if (!requireLogin()) {
             return;
         }
 
         String target = message.getTarget();
         if (target == null || target.isBlank()) {
-            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, username, "Rumnavnet kan ikke være tomt.");
+            sendServerMessage(MessageParser.TYPE_ERROR, SERVER_USER, username, "Rumnavnet kan ikke være tomt.");
             return;
         }
 
@@ -169,12 +177,11 @@ public class ClientHandler implements Runnable, MessageSender {
             System.out.println("Brugeren " + username + " flyttede fra " + previousRoom + " til " + currentRoom + ".");
         }
 
-        sendServerMessage(MESSAGE_TYPE_OK, SERVER_USER, username, "Du er nu i rummet " + currentRoom);
+        sendServerMessage(MessageParser.TYPE_OK, SERVER_USER, username, "Du er nu i rummet " + currentRoom);
     }
 
     private void handleText(Message message) {
-        if (username == null) {
-            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, "", "Du skal logge ind først.");
+        if (!requireLogin()) {
             return;
         }
 
@@ -197,38 +204,36 @@ public class ClientHandler implements Runnable, MessageSender {
             if (!username.equals(memberName)) {
                 MessageSender member = clientRegistry.getClient(memberName);
                 if (member != null) {
-                    member.sendServerMessage(MESSAGE_TYPE_TEXT, username, normalizedRoom, payload);
+                    member.sendServerMessage(MessageParser.TYPE_TEXT, username, normalizedRoom, payload);
                 }
             }
         }
     }
 
     private void handlePrivate(Message message) {
-        if (username == null) {
-            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, "", "Du skal logge ind først.");
+        if (!requireLogin()) {
             return;
         }
 
         String recipient = message.getTarget();
         String payload = message.getPayload();
         if (recipient == null || recipient.isBlank()) {
-            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, username, "Modtager mangler.");
+            sendServerMessage(MessageParser.TYPE_ERROR, SERVER_USER, username, "Modtager mangler.");
             return;
         }
 
         MessageSender target = clientRegistry.getClient(recipient);
         if (target == null) {
-            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, username, "Brugeren " + recipient + " er ikke online.");
+            sendServerMessage(MessageParser.TYPE_ERROR, SERVER_USER, username, "Brugeren " + recipient + " er ikke online.");
             return;
         }
 
         if (payload == null) payload = "";
-        target.sendServerMessage(MESSAGE_TYPE_PRIVATE, username, recipient, payload);
+        target.sendServerMessage(MessageParser.TYPE_PRIVATE, username, recipient, payload);
     }
 
     private void handleListFiles() {
-        if (username == null) {
-            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, "", "Du skal logge ind først.");
+        if (!requireLogin()) {
             return;
         }
 
@@ -242,8 +247,7 @@ public class ClientHandler implements Runnable, MessageSender {
     }
 
     private void handleGetFile(Message message) {
-        if (username == null) {
-            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, "", "Du skal logge ind først.");
+        if (!requireLogin()) {
             return;
         }
 
@@ -268,9 +272,9 @@ public class ClientHandler implements Runnable, MessageSender {
             return false;
         }
 
-        // Reject filenames that contain '|' to avoid confusing FILEDATA payload parsing (filename|base64)
+        // Afviser filnavne med '|', da de ellers ville ødelægge FILEDATA payloaden (filnavn|base64).
         if (fileName.contains("|")) {
-            // Send FILEERROR with empty target as per requested pattern: FILEERROR||Ugyldigt filnavn
+            // Sender FILEERROR med tomt target efter det aftalte mønster: FILEERROR||Ugyldigt filnavn
             sendServerMessage(MessageParser.TYPE_FILE_ERROR, SERVER_USER, "", "Ugyldigt filnavn");
             return false;
         }
@@ -280,7 +284,7 @@ public class ClientHandler implements Runnable, MessageSender {
 
     private String buildFilePayload(String fileName, byte[] data) {
         String base64 = Base64.getEncoder().encodeToString(data);
-        // Payload includes filename and base64 content, separated by a single pipe so client can split if needed
+        // Payload består af filnavn og base64 indhold adskilt af én pipe, så klienten kan dele dem op igen.
         return fileName + "|" + base64;
     }
 

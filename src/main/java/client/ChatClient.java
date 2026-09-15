@@ -10,6 +10,7 @@ import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.NoSuchElementException;
 import java.util.Scanner;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -26,15 +27,8 @@ public class ChatClient {
     private static final String DEFAULT_HOST = "localhost";
     private static final int DEFAULT_PORT = 5000;
     private static final int INPUT_QUEUE_SIZE = 64;
-    private static final long USER_INPUT_TIMEOUT_MS = 30000L;
+    private static final int SERVER_MESSAGE_QUEUE_SIZE = 64;
     private static final long CONNECTION_CHECK_TIMEOUT_MS = 500L;
-    private static final String COMMAND_PRIVATE = "PRIVATE";
-    private static final String COMMAND_JOIN_ROOM = "JOIN_ROOM";
-    private static final String COMMAND_QUIT = "QUIT";
-    private static final String COMMAND_LOGIN = "LOGIN";
-    private static final String COMMAND_TEXT = "TEXT";
-    private static final String MESSAGE_TYPE_OK = "OK";
-    private static final String MESSAGE_TYPE_ERROR = "ERROR";
     private static final String DEFAULT_ROOM = "all";
 
     /**
@@ -60,7 +54,7 @@ public class ChatClient {
              PrintWriter out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true)) {
 
             AtomicBoolean connectionLost = new AtomicBoolean(false);
-            BlockingQueue<String> serverMessages = new ArrayBlockingQueue<>(64);
+            BlockingQueue<String> serverMessages = new ArrayBlockingQueue<>(SERVER_MESSAGE_QUEUE_SIZE);
             AtomicBoolean loginPhase = new AtomicBoolean(true);
             Thread listener = new Thread(new ServerListener(serverInput, socket, connectionLost, serverMessages, loginPhase));
             listener.start();
@@ -76,7 +70,7 @@ public class ChatClient {
                     }
                 } catch (InterruptedException e) {
                     // afsluttes normalt
-                } catch (java.util.NoSuchElementException e) {
+                } catch (NoSuchElementException e) {
                     // scanner lukket / EOF
                 }
             });
@@ -93,7 +87,7 @@ public class ChatClient {
                     continue;
                 }
 
-                out.println(MessageParser.formatClientMessage(COMMAND_LOGIN, "", username));
+                out.println(MessageParser.formatClientMessage(MessageParser.TYPE_LOGIN, "", username));
                 loggedIn = waitForLoginResult(serverMessages, loginPhase, connectionLost);
                 if (!loggedIn) {
                     if (connectionLost.get()) {
@@ -170,12 +164,12 @@ public class ChatClient {
                     continue;
                 }
                 String status = parts[1].toUpperCase();
-                if (MESSAGE_TYPE_OK.equals(status)) {
+                if (MessageParser.TYPE_OK.equals(status)) {
                     loginPhase.set(false);
                     System.out.println("Velkommen, " + parts[3] + "!");
                     return true;
                 }
-                if (MESSAGE_TYPE_ERROR.equals(status)) {
+                if (MessageParser.TYPE_ERROR.equals(status)) {
                     return false;
                 }
             } catch (InterruptedException e) {
@@ -208,7 +202,7 @@ public class ChatClient {
                 if (parts.length < 3) {
                     return null;
                 }
-                return MessageParser.formatClientMessage(COMMAND_PRIVATE, parts[1], parts[2]);
+                return MessageParser.formatClientMessage(MessageParser.TYPE_PRIVATE, parts[1], parts[2]);
             case "list":
                 return MessageParser.formatClientListFiles();
             case "get":
@@ -220,9 +214,9 @@ public class ChatClient {
                 if (parts.length < 2) {
                     return null;
                 }
-                return MessageParser.formatClientMessage(COMMAND_JOIN_ROOM, parts[1], "");
+                return MessageParser.formatClientMessage(MessageParser.TYPE_JOIN_ROOM, parts[1], "");
             case "quit":
-                return MessageParser.formatClientMessage(COMMAND_QUIT, "", "");
+                return MessageParser.formatClientMessage(MessageParser.TYPE_QUIT, "", "");
             default:
                 return null;
         }
@@ -265,7 +259,7 @@ public class ChatClient {
                 continue;
             }
 
-            String textMessage = MessageParser.formatClientMessage(COMMAND_TEXT, DEFAULT_ROOM, line);
+            String textMessage = MessageParser.formatClientMessage(MessageParser.TYPE_TEXT, DEFAULT_ROOM, line);
             out.println(textMessage);
             System.out.println("Du: " + line);
         }
@@ -287,7 +281,7 @@ public class ChatClient {
         }
 
         out.println(slashCommand);
-        if (slashCommand.startsWith(COMMAND_PRIVATE + "|")) {
+        if (slashCommand.startsWith(MessageParser.TYPE_PRIVATE + "|")) {
             String[] parts = slashCommand.split("\\|", 3);
             if (parts.length >= 3) {
                 System.out.println("Du hvisker til " + parts[1] + ": " + parts[2]);
@@ -298,8 +292,8 @@ public class ChatClient {
 
     private static boolean processRawProtocolCommand(String trimmed, PrintWriter out) {
         String upper = trimmed.isEmpty() ? "" : trimmed.split("\\|", 2)[0].toUpperCase();
-        boolean isCommand = upper.equals(COMMAND_PRIVATE) || upper.equals(COMMAND_JOIN_ROOM)
-                || upper.equals(COMMAND_QUIT) || upper.equals(COMMAND_LOGIN) || upper.equals(COMMAND_TEXT);
+        boolean isCommand = upper.equals(MessageParser.TYPE_PRIVATE) || upper.equals(MessageParser.TYPE_JOIN_ROOM)
+                || upper.equals(MessageParser.TYPE_QUIT) || upper.equals(MessageParser.TYPE_LOGIN) || upper.equals(MessageParser.TYPE_TEXT);
 
         if (isCommand && trimmed.contains("|")) {
             out.println(trimmed);
@@ -310,7 +304,7 @@ public class ChatClient {
 
     private static boolean isQuitCommand(String protocolLine) {
         return protocolLine != null
-                && protocolLine.toUpperCase().startsWith(COMMAND_QUIT + "|");
+                && protocolLine.toUpperCase().startsWith(MessageParser.TYPE_QUIT + "|");
     }
 
     private static void stopInputThread(Thread inputThread) {

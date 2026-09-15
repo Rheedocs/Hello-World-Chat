@@ -1,4 +1,3 @@
-
 package server;
 
 import java.io.BufferedOutputStream;
@@ -67,7 +66,7 @@ public class ChatServer {
         }
 
         System.out.println("Starter ChatServer på port " + port);
-        // Create the shared file repository used for file transfer features
+        // Opretter det delte filrepository, som bruges til filoverførsel
         ServerFileRepository fileRepository;
         try {
             fileRepository = new ServerFileRepository(getSharedFilesDirectory());

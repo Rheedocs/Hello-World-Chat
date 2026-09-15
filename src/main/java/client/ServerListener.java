@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Base64;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import protocol.MessageParser;
@@ -19,7 +20,7 @@ public class ServerListener implements Runnable {
     private final BufferedReader input;
     private final Socket socket;
     private final AtomicBoolean connectionLost;
-    private final java.util.concurrent.BlockingQueue<String> serverMessages;
+    private final BlockingQueue<String> serverMessages;
     private final AtomicBoolean loginPhase;
 
     /**
@@ -33,7 +34,7 @@ public class ServerListener implements Runnable {
      * Opretter en listener, der gemmer indkommende serverbeskeder i en queue under loginfasen.
      */
     public ServerListener(BufferedReader input, Socket socket, AtomicBoolean connectionLost,
-            java.util.concurrent.BlockingQueue<String> serverMessages) {
+                          BlockingQueue<String> serverMessages) {
         this(input, socket, connectionLost, serverMessages, new AtomicBoolean(true));
     }
 
@@ -41,7 +42,7 @@ public class ServerListener implements Runnable {
      * Opretter en listener med alle nødvendige flags for login- og chatfase.
      */
     public ServerListener(BufferedReader input, Socket socket, AtomicBoolean connectionLost,
-            java.util.concurrent.BlockingQueue<String> serverMessages, AtomicBoolean loginPhase) {
+                          BlockingQueue<String> serverMessages, AtomicBoolean loginPhase) {
         this.input = input;
         this.socket = socket;
         this.connectionLost = connectionLost;
@@ -111,14 +112,14 @@ public class ServerListener implements Runnable {
         String payload = msg.getPayload();
 
         switch (type) {
-            case "FILELIST":
+            case MessageParser.TYPE_FILE_LIST:
                 if (payload == null || payload.isBlank()) {
                     return "[Info]: Ingen filer på serveren.";
                 }
                 return "Filer på serveren: " + payload.replace(",", ", ");
-            case "FILEERROR":
+            case MessageParser.TYPE_FILE_ERROR:
                 return "[Filfejl fra " + sender + "]: " + payload;
-            case "FILEDATA":
+            case MessageParser.TYPE_FILE_DATA:
                 // Forventet payload: filnavn|<base64>
                 String[] parts = payload.split("\\|", 2);
                 if (parts.length < 2) {
@@ -161,13 +162,13 @@ public class ServerListener implements Runnable {
         String payload = parts[4];
 
         switch (type) {
-            case "TEXT":
+            case MessageParser.TYPE_TEXT:
                 return sender + ": " + payload;
-            case "PRIVATE":
+            case MessageParser.TYPE_PRIVATE:
                 return "[Privat fra " + sender + "]: " + payload;
-            case "ERROR":
+            case MessageParser.TYPE_ERROR:
                 return "[Fejl]: " + payload;
-            case "OK":
+            case MessageParser.TYPE_OK:
                 if (payload == null || payload.isBlank()) {
                     return "[Info]: OK";
                 }

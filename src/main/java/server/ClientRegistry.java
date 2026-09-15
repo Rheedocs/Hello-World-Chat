@@ -1,4 +1,3 @@
-
 package server;
 
 import java.util.ArrayList;
@@ -6,6 +5,7 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import protocol.MessageParser;
 import protocol.MessageSender;
 
 /**
@@ -68,7 +68,7 @@ public class ClientRegistry {
             }
             String clientUsername = client.getUsername();
             if (clientUsername != null && !senderUsername.equals(clientUsername)) {
-                client.sendServerMessage("TEXT", senderUsername, target, payload);
+                client.sendServerMessage(MessageParser.TYPE_TEXT, senderUsername, target, payload);
             }
         }
     }
