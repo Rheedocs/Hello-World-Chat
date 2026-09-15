@@ -248,29 +248,45 @@ public class ClientHandler implements Runnable, MessageSender {
         }
 
         String fileName = message.getTarget();
+        if (!validateRequestedFile(fileName)) {
+            return;
+        }
+
+        try {
+            byte[] data = fileRepository.readFile(fileName);
+            sendFileDataResponse(fileName, data);
+        } catch (SecurityException se) {
+            sendServerMessage(MessageParser.TYPE_FILE_ERROR, SERVER_USER, username, "Adgang nægtet: " + se.getMessage());
+        } catch (IOException ioe) {
+            sendServerMessage(MessageParser.TYPE_FILE_ERROR, SERVER_USER, username, "Kunne ikke læse filen: " + ioe.getMessage());
+        }
+    }
+
+    private boolean validateRequestedFile(String fileName) {
         if (fileName == null || fileName.isBlank()) {
             sendServerMessage(MessageParser.TYPE_FILE_ERROR, SERVER_USER, username, "Filnavn mangler.");
-            return;
+            return false;
         }
 
         // Reject filenames that contain '|' to avoid confusing FILEDATA payload parsing (filename|base64)
         if (fileName.contains("|")) {
             // Send FILEERROR with empty target as per requested pattern: FILEERROR||Ugyldigt filnavn
             sendServerMessage(MessageParser.TYPE_FILE_ERROR, SERVER_USER, "", "Ugyldigt filnavn");
-            return;
+            return false;
         }
 
-        try {
-            byte[] data = fileRepository.readFile(fileName);
-            String base64 = Base64.getEncoder().encodeToString(data);
-            // Payload includes filename and base64 content, separated by a single pipe so client can split if needed
-            String payload = fileName + "|" + base64;
-            sendServerMessage(MessageParser.TYPE_FILE_DATA, SERVER_USER, username, payload);
-        } catch (SecurityException se) {
-            sendServerMessage(MessageParser.TYPE_FILE_ERROR, SERVER_USER, username, "Adgang nægtet: " + se.getMessage());
-        } catch (IOException ioe) {
-            sendServerMessage(MessageParser.TYPE_FILE_ERROR, SERVER_USER, username, "Kunne ikke læse filen: " + ioe.getMessage());
-        }
+        return true;
+    }
+
+    private String buildFilePayload(String fileName, byte[] data) {
+        String base64 = Base64.getEncoder().encodeToString(data);
+        // Payload includes filename and base64 content, separated by a single pipe so client can split if needed
+        return fileName + "|" + base64;
+    }
+
+    private void sendFileDataResponse(String fileName, byte[] data) {
+        String payload = buildFilePayload(fileName, data);
+        sendServerMessage(MessageParser.TYPE_FILE_DATA, SERVER_USER, username, payload);
     }
 
     private void disconnect() {
