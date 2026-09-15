@@ -24,3 +24,7 @@ hs_err_pid*
 replay_pid*
 .idea/
 target/
+
+# Ignore downloads produced by the client; keep .gitkeep to preserve directory
+downloads/*
+!downloads/.gitkeep
