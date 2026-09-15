@@ -191,9 +191,9 @@ Koden er organiseret i fire pakker efter ansvar:
 - `server`, `ChatServer`, `ClientHandler`, `ClientRegistry`, `ChatRoomManager`, `ServerFileRepository`
 - `client`, `ChatClient`, `ServerListener`
 
-Testfilerne følger samme pakkeinddeling som den kode de tester.
-
 Afhængighederne går i én retning, domain har ingen afhængigheder til de andre pakker, protocol afhænger kun af domain, mens server og client begge afhænger af domain og protocol, men ikke af hinanden.
+
+Testfilerne følger samme pakkeinddeling som den kode de tester.
 
 ## Trådmodel og delte ressourcer
 
@@ -252,5 +252,63 @@ Vi opdagede undervejs, gennem et eksternt code review, at filnavne med et pipe-t
 | /get med path traversal-forsøg (fx ../pom.xml) | Afvist af ServerFileRepositorys sikkerhedstjek | Bestået |
 
 ## Sekvensdiagram
+## Sekvensdiagram
 
-[Indsættes inden aflevering, viser enten den valgte udvidelse eller et fejlsætningsforløb, som Mermaid/PlantUML]
+### Login og brugernavn-konflikt
+
+```mermaid
+sequenceDiagram
+   autonumber
+   participant Client as ChatClient
+   participant Handler as ClientHandler
+   participant Registry as ClientRegistry
+   participant Rooms as ChatRoomManager
+
+   Client->>+Handler: LOGIN||bob
+   Note right of Handler: parseClientMessage(rawMessage)
+
+   Handler->>+Registry: register("bob", this)
+   Note right of Registry: putIfAbsent("bob", this)<br/>atomisk tjek
+   Registry-->>-Handler: boolean resultat
+
+   alt Brugernavn ledigt
+       Handler->>+Rooms: addUserToRoom("bob", "lobby")
+       Note right of Rooms: computeIfAbsent("lobby")<br/>.add("bob")
+       Rooms-->>-Handler: (tilføjet til rummet)
+
+       Handler->>Handler: username = "bob"<br/>currentRoom = "lobby"
+       Handler-->>Client: OK|server|bob|
+   else Brugernavn optaget
+       Handler-->>Client: ERROR|server|bob|Brugernavnet er optaget.
+   end
+   deactivate Handler
+```
+
+### Filoverførsel (fejlsætningsforløb)
+
+```mermaid
+sequenceDiagram
+   autonumber
+   participant Client as ChatClient
+   participant Handler as ClientHandler
+   participant Repo as ServerFileRepository
+
+   Client->>+Handler: GETFILE|eldenring.txt|
+   Note right of Handler: username != null<br/>fileName indeholder ikke "|"
+
+   Handler->>+Repo: readFile("eldenring.txt")
+   Note right of Repo: resolveSafeFilePath(fileName)
+
+   alt Fil findes
+       Repo-->>-Handler: byte[] data
+       Handler->>Handler: Base64.getEncoder().encodeToString(data)
+       Handler-->>Client: FILEDATA|server|bob|eldenring.txt|<base64>
+       Note right of Client: ServerListener læser svaret<br/>afkoder Base64, gemmer i downloads/
+   else Fil findes ikke
+       Repo-->>Handler: throw IOException
+       Handler->>Handler: catch IOException
+       Handler-->>Client: FILEERROR|server|bob|Kunne ikke læse filen
+       Note right of Client: ServerListener viser fejlbesked
+   end
+   deactivate Handler
+```
