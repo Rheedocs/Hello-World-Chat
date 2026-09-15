@@ -53,10 +53,11 @@ public class ChatClient {
         }
 
         System.out.println("Forbinder til " + host + ":" + port);
+        // Scanner lukkes bevidst ikke: lukning blokerer, mens inputtråden venter på System.in.
+        Scanner scanner = new Scanner(new InputStreamReader(new BufferedInputStream(System.in), StandardCharsets.UTF_8));
         try (Socket socket = new Socket(host, port);
              BufferedReader serverInput = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-             PrintWriter out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
-             Scanner scanner = new Scanner(new InputStreamReader(new BufferedInputStream(System.in), StandardCharsets.UTF_8))) {
+             PrintWriter out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true)) {
 
             AtomicBoolean connectionLost = new AtomicBoolean(false);
             BlockingQueue<String> serverMessages = new ArrayBlockingQueue<>(64);
@@ -229,33 +230,20 @@ public class ChatClient {
             }
 
             String trimmed = line.trim();
-            if ("/help".equals(trimmed)) {
-                printCommandHelp();
+            if (handleLocalCommand(trimmed)) {
                 continue;
             }
 
-            String slashCommand = parseSlashCommand(trimmed);
-            if (slashCommand != null) {
-                out.println(slashCommand);
-                if (slashCommand.startsWith(COMMAND_PRIVATE + "|")) {
-                    String[] parts = slashCommand.split("\\|", 3);
-                    if (parts.length >= 3) {
-                        System.out.println("Du hvisker til " + parts[1] + ": " + parts[2]);
-                    }
-                }
-                if (slashCommand.startsWith(COMMAND_QUIT + "|")) {
+            String sentCommand = processSlashCommand(trimmed, out);
+            if (sentCommand != null) {
+                if (isQuitCommand(sentCommand)) {
                     break;
                 }
                 continue;
             }
 
-            String upper = trimmed.isEmpty() ? "" : trimmed.split("\\|", 2)[0].toUpperCase();
-            boolean isCommand = upper.equals(COMMAND_PRIVATE) || upper.equals(COMMAND_JOIN_ROOM)
-                    || upper.equals(COMMAND_QUIT) || upper.equals(COMMAND_LOGIN) || upper.equals(COMMAND_TEXT);
-
-            if (isCommand && trimmed.contains("|")) {
-                out.println(trimmed);
-                if (upper.equals(COMMAND_QUIT)) {
+            if (processRawProtocolCommand(trimmed, out)) {
+                if (isQuitCommand(trimmed)) {
                     break;
                 }
                 continue;
@@ -265,6 +253,48 @@ public class ChatClient {
             out.println(textMessage);
             System.out.println("Du: " + line);
         }
+    }
+
+    private static boolean handleLocalCommand(String trimmed) {
+        if ("/help".equalsIgnoreCase(trimmed)) {
+            // Denne kommando er lokal for klienten og skal ikke sendes videre til serveren.
+            printCommandHelp();
+            return true;
+        }
+        return false;
+    }
+
+    private static String processSlashCommand(String trimmed, PrintWriter out) {
+        String slashCommand = parseSlashCommand(trimmed);
+        if (slashCommand == null) {
+            return null;
+        }
+
+        out.println(slashCommand);
+        if (slashCommand.startsWith(COMMAND_PRIVATE + "|")) {
+            String[] parts = slashCommand.split("\\|", 3);
+            if (parts.length >= 3) {
+                System.out.println("Du hvisker til " + parts[1] + ": " + parts[2]);
+            }
+        }
+        return slashCommand;
+    }
+
+    private static boolean processRawProtocolCommand(String trimmed, PrintWriter out) {
+        String upper = trimmed.isEmpty() ? "" : trimmed.split("\\|", 2)[0].toUpperCase();
+        boolean isCommand = upper.equals(COMMAND_PRIVATE) || upper.equals(COMMAND_JOIN_ROOM)
+                || upper.equals(COMMAND_QUIT) || upper.equals(COMMAND_LOGIN) || upper.equals(COMMAND_TEXT);
+
+        if (isCommand && trimmed.contains("|")) {
+            out.println(trimmed);
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean isQuitCommand(String protocolLine) {
+        return protocolLine != null
+                && protocolLine.toUpperCase().startsWith(COMMAND_QUIT + "|");
     }
 
     private static void stopInputThread(Thread inputThread) {
