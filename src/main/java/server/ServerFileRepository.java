@@ -28,7 +28,7 @@ public class ServerFileRepository {
     }
 
     /**
-     * Returnerer alle almindelige filer i rodmappen sorteret alfabetisk.
+     * Returnerer alle almindelige, ikke skjulte filer i rodmappen sorteret alfabetisk.
      */
     public List<String> listFiles() throws IOException {
         lock.readLock().lock();
@@ -36,6 +36,8 @@ public class ServerFileRepository {
             return files
                     .filter(Files::isRegularFile)
                     .map(path -> path.getFileName().toString())
+                    // Skjulte filer som .gitkeep er kun til Git og skal ikke vises for brugeren.
+                    .filter(name -> !name.startsWith("."))
                     .sorted(Comparator.naturalOrder())
                     .toList();
         } finally {
