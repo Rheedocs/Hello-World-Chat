@@ -181,6 +181,13 @@ public class ChatClient {
                     return null;
                 }
                 return MessageParser.formatClientMessage(COMMAND_PRIVATE, parts[1], parts[2]);
+            case "list":
+                return MessageParser.formatClientListFiles();
+            case "get":
+                if (parts.length < 2) {
+                    return null;
+                }
+                return MessageParser.formatClientGetFile(parts[1]);
             case "join":
                 if (parts.length < 2) {
                     return null;

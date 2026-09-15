@@ -1,6 +1,10 @@
 
 package server;
 
+import domain.Message;
+import protocol.MessageParser;
+import protocol.MessageSender;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -8,6 +12,8 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Base64;
 
 public class ClientHandler implements Runnable, MessageSender {
     private static final String MESSAGE_TYPE_LOGIN = "LOGIN";
@@ -90,6 +96,9 @@ public class ClientHandler implements Runnable, MessageSender {
                     break;
                 case MessageParser.TYPE_LIST_FILES:
                     handleListFiles();
+                    break;
+                case MessageParser.TYPE_GET_FILE:
+                    handleGetFile(message);
                     break;
                 default:
                     sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, username == null ? "" : username, "Ukendt kommando: " + type);
@@ -213,6 +222,38 @@ public class ClientHandler implements Runnable, MessageSender {
             sendServerMessage(MessageParser.TYPE_FILE_LIST, SERVER_USER, username, payload);
         } catch (IOException e) {
             sendServerMessage(MessageParser.TYPE_FILE_ERROR, SERVER_USER, username, "Kunne ikke liste filer: " + e.getMessage());
+        }
+    }
+
+    private void handleGetFile(Message message) {
+        if (username == null) {
+            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, "", "Du skal logge ind først.");
+            return;
+        }
+
+        String fileName = message.getTarget();
+        if (fileName == null || fileName.isBlank()) {
+            sendServerMessage(MessageParser.TYPE_FILE_ERROR, SERVER_USER, username, "Filnavn mangler.");
+            return;
+        }
+
+        // Reject filenames that contain '|' to avoid confusing FILEDATA payload parsing (filename|base64)
+        if (fileName.contains("|")) {
+            // Send FILEERROR with empty target as per requested pattern: FILEERROR||Ugyldigt filnavn
+            sendServerMessage(MessageParser.TYPE_FILE_ERROR, SERVER_USER, "", "Ugyldigt filnavn");
+            return;
+        }
+
+        try {
+            byte[] data = fileRepository.readFile(fileName);
+            String base64 = Base64.getEncoder().encodeToString(data);
+            // Payload includes filename and base64 content, separated by a single pipe so client can split if needed
+            String payload = fileName + "|" + base64;
+            sendServerMessage(MessageParser.TYPE_FILE_DATA, SERVER_USER, username, payload);
+        } catch (SecurityException se) {
+            sendServerMessage(MessageParser.TYPE_FILE_ERROR, SERVER_USER, username, "Adgang nægtet: " + se.getMessage());
+        } catch (IOException ioe) {
+            sendServerMessage(MessageParser.TYPE_FILE_ERROR, SERVER_USER, username, "Kunne ikke læse filen: " + ioe.getMessage());
         }
     }
 
