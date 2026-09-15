@@ -7,11 +7,14 @@ Navne: Nicki, Goncalo, Mattias
 
 ## Sådan starter du server og klient
 
+Via terminal:
 ```bash
 mvn clean compile
-java -cp target/classes ChatServer
-java -cp target/classes ChatClient
+java -cp target/classes server.ChatServer
+java -cp target/classes client.ChatClient
 ```
+
+Bemærk, danske tegn (æ, ø, å) kan vises forkert i nogle Windows-terminaler (fx PowerShell). Kør i stedet programmet via din IDE's Run-knap (fx IntelliJ) for korrekt visning, IDE'en sætter selv de nødvendige encoding-flag.
 
 Når klienten starter, vises den korte hjælp:
 
@@ -76,6 +79,17 @@ Eksempler:
 
 [Indsættes når klassestrukturen er endeligt besluttet og implementeret, som Mermaid/PlantUML]
 
+## Pakkestruktur
+
+Koden er organiseret i fire pakker efter ansvar:
+
+- `domain`, `Message`
+- `protocol`, `MessageParser`, `MessageSender`
+- `server`, `ChatServer`, `ClientHandler`, `ClientRegistry`, `ChatRoomManager`, `ServerFileRepository`
+- `client`, `ChatClient`, `ServerListener`
+
+Testfilerne følger samme pakkeinddeling som den kode de tester.
+
 ## Trådmodel og delte ressourcer
 
 Serveren bruger en `ExecutorService` med en fast trådpulje (3 tråde) til at håndtere flere samtidige klienter. Hver forbundet klient får sin egen `ClientHandler`-instans, som kører som en opgave i trådpuljen og håndterer al kommunikation med netop den klient, uafhængigt af de andre.
@@ -94,6 +108,8 @@ To samlinger deles mellem alle disse tråde samtidig:
 Hovedtråden henter fra input-køen med en kort timeout (500ms) i stedet for at blokere permanent. Det gør det muligt at tjekke en delt `AtomicBoolean` (`connectionLost`), som `ServerListener` sætter hvis forbindelsen til serveren tabes. Dermed opdager klienten en død server proaktivt, indenfor cirka et sekund, selv hvis brugeren ikke skriver noget.
 
 Vi stødte undervejs på en konkret race condition, hovedtråden forsøgte oprindeligt selv at læse et svar fra serveren synkront efter at have sendt QUIT, samtidig med at `ServerListener` allerede læste fra den samme stream i baggrunden. To tråde der læser fra samme socket samtidig gav uforudsigelige resultater. Løsningen var at lade `ServerListener` alene stå for al læsning fra serveren, hovedtråden sender kun beskeder, den læser aldrig selv fra streamen.
+
+Vi stødte også på et UTF-8-encoding-problem med danske tegn (æ, ø, å). Det viste sig at have tre lag, kildefilernes egen encoding under kompilering, programmets output-stream-encoding, og selve terminalens rendering. Vi rettede de to første i koden (UTF-8 eksplicit i `pom.xml`'s compiler-konfiguration, og i `System.out`/`System.in` i både klient og server), det tredje er en kendt Windows PowerShell-begrænsning, løses ved at køre programmet via en IDE i stedet for rå terminal.
 
 ## Valgt udvidelse
 

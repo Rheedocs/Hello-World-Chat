@@ -1,3 +1,4 @@
+package domain;
 
 public class Message {
     private final String type;
