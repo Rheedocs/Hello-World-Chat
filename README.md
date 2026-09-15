@@ -94,8 +94,94 @@ FILEDATA's payload er selv opdelt i to dele adskilt af en ekstra pipe, filnavn o
 
 ## Klassediagram
 
-[Indsættes når klassestrukturen er endeligt besluttet og implementeret, som Mermaid/PlantUML]
+```mermaid
+---
+config:
+  layout: elk
+---
+classDiagram
+    class Message {
+      -String type
+      -String target
+      -String payload
+      +getType() String
+      +getTarget() String
+      +getPayload() String
+    }
+    class MessageParser {
+      +parseClientMessage(raw) Message
+      +parseServerMessage(raw) Message
+      +formatClientMessage(type, target, payload) String
+      +formatServerMessage(type, sender, target, payload) String
+    }
+    class MessageSender {
+      <<interface>>
+      +getUsername() String
+      +sendServerMessage(type, sender, target, payload)
+    }
+    class ChatServer {
+      -ExecutorService clientPool
+      -ClientRegistry clientRegistry
+      -ChatRoomManager chatRoomManager
+      +main(args)
+    }
+    class ClientHandler {
+      -Socket socket
+      -String username
+      -String currentRoom
+      +run()
+      +sendServerMessage(type, sender, target, payload)
+    }
+    class ClientRegistry {
+      -Map~String,MessageSender~ clients
+      +register(username, client) boolean
+      +unregister(username)
+      +getClient(username) MessageSender
+    }
+    class ChatRoomManager {
+      -Map~String,Set~ roomMembers
+      +addUserToRoom(username, room)
+      +moveUserToRoom(username, room)
+      +removeUser(username)
+      +getMembers(room) Set
+      +getUserRoom(username) String
+      +getRoomNameForTarget(target) String
+    }
+    class ServerFileRepository {
+      -Path rootDirectory
+      +listFiles() List
+      +readFile(fileName) byte[]
+    }
+    class ChatClient {
+      +main(args)
+    }
+    class ServerListener {
+      -BufferedReader input
+      -Socket socket
+      +run()
+    }
 
+    ClientHandler ..|> MessageSender : implementerer
+    ClientHandler --> ClientRegistry : slår klienter op i
+    ClientHandler --> ChatRoomManager : styrer rum-medlemskab via
+    ClientHandler --> ServerFileRepository : henter filer via
+    ClientHandler ..> MessageParser : bruger til at parse/formatere
+    ChatServer --> ClientHandler : opretter én pr. klient
+    ChatServer --> ClientRegistry : ejer
+    ChatServer --> ChatRoomManager : ejer
+    ClientRegistry o--> MessageSender : holder liste af tilsluttede
+    ChatClient --> ServerListener : starter i egen tråd
+    ChatClient ..> MessageParser : bruger til at formatere
+    ServerListener ..> MessageParser : bruger til at parse svar
+    MessageParser ..> Message : opretter
+```
+
+**Relationstyper brugt i diagrammet:**
+
+- `..|>` (stiplet pil med trekant), **realisering/implementering**, `ClientHandler` implementerer `MessageSender`-interfacet
+- `-->` (fuld pil), **association**, én klasse bruger/kender til en anden, typisk gennem et felt eller metodekald
+- `..>` (stiplet pil), **afhængighed**, én klasse bruger en anden kortvarigt (fx som parameter eller lokalt kald), uden at holde en permanent reference
+- `o-->` (fuld pil med åben diamant), **aggregation**, `ClientRegistry` *holder* en samling af `MessageSender`-objekter over tid, ikke bare et engangskald, diamanten sidder ved den klasse der "ejer" samlingen (`ClientRegistry`)
 ## Pakkestruktur
 
 Koden er organiseret i fire pakker efter ansvar:
