@@ -85,18 +85,21 @@ public class ChatClient {
 
             boolean loggedIn = false;
             while (!loggedIn) {
-                String username = readUsername(inputQueue);
+                String username = readUsername(inputQueue, connectionLost);
                 if (username == null) {
                     break;
                 }
-                username = username.trim();
                 if (username.isBlank()) {
                     continue;
                 }
 
                 out.println(MessageParser.formatClientMessage(COMMAND_LOGIN, "", username));
-                loggedIn = waitForLoginResult(serverMessages, loginPhase);
+                loggedIn = waitForLoginResult(serverMessages, loginPhase, connectionLost);
                 if (!loggedIn) {
+                    if (connectionLost.get()) {
+                        System.out.println("Forbindelsen til serveren blev afbrudt.");
+                        break;
+                    }
                     System.out.println("Login fejlede. Prøv igen.");
                 }
             }
@@ -131,24 +134,37 @@ public class ChatClient {
         }
     }
 
-    private static String readUsername(BlockingQueue<String> inputQueue) {
+    private static String readUsername(BlockingQueue<String> inputQueue, AtomicBoolean connectionLost) {
         System.out.print("Indtast brugernavn: ");
-        String username = null;
         try {
-            username = inputQueue.take();
+            while (true) {
+                // Poll med timeout, så vi opdager en lukket server, mens brugeren ikke har skrevet noget.
+                String username = inputQueue.poll(CONNECTION_CHECK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                if (username != null) {
+                    return username.trim();
+                }
+                if (connectionLost.get()) {
+                    System.out.println();
+                    System.out.println("Forbindelsen til serveren blev afbrudt.");
+                    return null;
+                }
+            }
         } catch (InterruptedException e) {
-            // ignoreres
+            Thread.currentThread().interrupt();
+            return null;
         }
-        if (username != null) {
-            username = username.trim();
-        }
-        return username;
     }
 
-    private static boolean waitForLoginResult(BlockingQueue<String> serverMessages, AtomicBoolean loginPhase) {
+    private static boolean waitForLoginResult(BlockingQueue<String> serverMessages, AtomicBoolean loginPhase, AtomicBoolean connectionLost) {
         while (true) {
             try {
-                String serverMessage = serverMessages.take();
+                String serverMessage = serverMessages.poll(CONNECTION_CHECK_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                if (serverMessage == null) {
+                    if (connectionLost.get()) {
+                        return false;
+                    }
+                    continue;
+                }
                 String[] parts = serverMessage.split("\\|", 5);
                 if (parts.length < 4) {
                     continue;
