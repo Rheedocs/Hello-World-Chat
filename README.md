@@ -252,7 +252,6 @@ Vi opdagede undervejs, gennem et eksternt code review, at filnavne med et pipe-t
 | /get med path traversal-forsøg (fx ../pom.xml) | Afvist af ServerFileRepositorys sikkerhedstjek | Bestået |
 
 ## Sekvensdiagram
-## Sekvensdiagram
 
 ### Login og brugernavn-konflikt
 
