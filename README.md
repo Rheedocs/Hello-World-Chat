@@ -19,7 +19,7 @@ Bemærk, danske tegn (æ, ø, å) kan vises forkert i nogle Windows-terminaler (
 Når klienten starter, vises den korte hjælp:
 
 ```text
-Kommandoer: /w <bruger> <besked>, /join <rum>, /quit. Skriv bare almindelig tekst for at chatte i dit nuværende rum.
+Kommandoer: /w <bruger> <besked>, /join <rum>, /list, /get <filnavn>, /quit. Skriv bare almindelig tekst for at chatte i dit nuværende rum.
 ```
 
 ### Kommandotolkning i klienten
@@ -73,7 +73,24 @@ Eksempler:
 2026-09-25 12:02:00|ERROR|server|bob|Brugernavnet er optaget
 ```
 
-[Beskriv her de øvrige beskedtyper I selv beslutter jer for, ud over LOGIN, JOIN_ROOM, TEXT, PRIVATE, QUIT]
+Filoverførsel tilføjer fire nye beskedtyper:
+ 
+Klient til server:
+```
+LISTFILES||
+GETFILE|eldenring.txt|
+```
+ 
+Server til klient:
+```
+2026-09-25 12:03:00|FILELIST|server|bob|eldenring.txt,readme.md
+2026-09-25 12:04:00|FILEDATA|server|bob|eldenring.txt|SGVqIGZyYSBzZXJ2ZXJlbg==
+2026-09-25 12:05:00|FILEERROR|server|bob|Filen findes ikke
+```
+ 
+FILEDATA's payload er selv opdelt i to dele adskilt af en ekstra pipe, filnavn og Base64-kodet indhold.
+ 
+---
 
 ## Klassediagram
 
@@ -113,27 +130,38 @@ Vi stødte også på et UTF-8-encoding-problem med danske tegn (æ, ø, å). Det
 
 ## Valgt udvidelse
 
-[Hvilken udvidelse valgte I, og hvordan er den integreret i løsningen]
+Vi valgte filoverførsel som udvidelse, med en tydeligt beskrevet overførselsprotokol, i tråd med vores erfaring fra TCP-filoverførsel-opgaven.
+
+Protokollen er udvidet med fire nye beskedtyper, `LISTFILES` og `GETFILE` (klient til server), samt `FILELIST`, `FILEDATA` og `FILEERROR` (server til klient). I stedet for at åbne en separat, binær kanal (som i TCP-opgaven), valgte vi at Base64-kode filens indhold og sende det som én almindelig tekstlinje, i tråd med resten af chattens linjebaserede protokol. Det betyder ingen blanding af binær og tekstlæsning på samme stream, hvilket vi ved fra tidligere erfaring kan give alvorlige, svært gennemskuelige fejl.
+
+Serveren har en ny klasse, `ServerFileRepository`, som håndterer sikker fillæsning og -listning fra en delt `server_files/`-mappe. Den bruger canonical path-validering (samme mønster som i TCP-opgaven) til at forhindre path traversal, og en `ReentrantReadWriteLock` til trådsikker samtidig adgang, flere klienter kan læse filer parallelt, uden at korrumpere hinandens data.
+
+Klienten understøtter to nye slash-kommandoer, `/list` for at se filer på serveren, og `/get <filnavn>` for at hente en fil. Modtagne filer afkodes fra Base64 og gemmes i en lokal `downloads/`-mappe, med samme canonical path-sikkerhed på klientsiden, så en ondsindet server ikke kan narre klienten til at skrive filer udenfor den tilladte mappe.
+
+Vi opdagede undervejs, gennem et eksternt code review, at filnavne med et pipe-tegn (`|`) kunne forvirre parsingen af `FILEDATA`-svaret (som har formatet `filnavn|base64data`). Vi rettede det ved eksplicit at afvise filnavne med `|` i `GETFILE`-håndteringen.
 
 ## AI-dokumentation
 
 | Opgave | AI-værktøj | AI's forslag | Vores vurdering og ændringer | Kontrol og test |
 |---|---|---|---|---|
-| | | | | |
-| | | | | |
-| | | | | |
+| QUIT-bekræftelse | GitHub Copilot | Klienten skulle selv læse serverens svar synkront efter at have sendt QUIT | Afvist, det skabte en race condition da ServerListener allerede læste fra samme stream i baggrunden. Rettet til at lade ServerListener alene stå for al læsning | Testet manuelt flere gange i træk, bekræftet konsistent efter rettelsen |
+| Filnavnevalidering i GETFILE | Claude (eksternt review) | Filnavne med `\|` kunne forvirre parsingen af FILEDATA-payloaden | Fulgt, tilføjede eksplicit afvisning af `\|` i filnavne før filen læses | Testet med et filnavn indeholdende `\|`, bekræftet korrekt FILEERROR |
+| Unit-tests for ServerFileRepository | GitHub Copilot | Første version brugte Mockito til at mocke selve filsystemet | Afvist, det beviste kun at koden kaldte de rigtige metoder, ikke at den faktisk virkede. Bad om at få dem omskrevet til ægte @TempDir-tests med rigtige filer | Kørt, 26 tests bestået, inklusiv et reelt path traversal-forsøg mod en fysisk fil |
 
 ## Test
 
 | Scenarie | Forventet resultat | Resultat |
 |---|---|---|
-| Tre klienter forbindes samtidig | Alle kan sende og modtage beskeder | |
-| To brugere vælger samme brugernavn | Den anden bruger afvises | |
-| En bruger sender en besked i et rum | Kun brugere i rummet modtager den | |
-| En bruger sender en privat besked | Kun modtageren ser den | |
-| En klient sender en fejlformateret besked | Serveren sender en fejl og fortsætter | |
-| En klient lukker uventet | Brugeren fjernes fra serverens samlinger | |
-| Den valgte udvidelse anvendes | Udvidelsen fungerer som beskrevet | |
+| Tre klienter forbindes samtidig | Alle kan sende og modtage beskeder | Bestået |
+| To brugere vælger samme brugernavn | Den anden bruger afvises | Bestået |
+| En bruger sender en besked i et rum | Kun brugere i rummet modtager den | Bestået |
+| En bruger sender en privat besked | Kun modtageren ser den | Bestået |
+| En klient sender en fejlformateret besked | Serveren sender en fejl og fortsætter | Bestået |
+| En klient lukker uventet | Brugeren fjernes fra serverens samlinger | Bestået |
+| /list viser filer på serveren | Korrekt filliste vises | Bestået |
+| /get på en eksisterende fil | Filen downloades og matcher originalen | Bestået |
+| /get på en ukendt fil | FILEERROR vises til brugeren | Bestået |
+| /get med path traversal-forsøg (fx ../pom.xml) | Afvist af ServerFileRepositorys sikkerhedstjek | Bestået |
 
 ## Sekvensdiagram
 
