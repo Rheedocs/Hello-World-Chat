@@ -1,7 +1,12 @@
 
+package server;
+
+import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -29,6 +34,8 @@ public class ChatServer {
     }
 
     public static void main(String[] args) {
+        configureUtf8Console();
+
         try {
             ensureSharedFilesDirectoryExists();
         } catch (IOException e) {
@@ -72,6 +79,15 @@ public class ChatServer {
             e.printStackTrace();
         } finally {
             shutdownThreadPool();
+        }
+    }
+
+    private static void configureUtf8Console() {
+        try {
+            System.setOut(new PrintStream(new BufferedOutputStream(System.out), true, StandardCharsets.UTF_8.name()));
+            System.setErr(new PrintStream(new BufferedOutputStream(System.err), true, StandardCharsets.UTF_8.name()));
+        } catch (Exception e) {
+            System.err.println("Kunne ikke aktivere UTF-8 på konsollen: " + e.getMessage());
         }
     }
 
