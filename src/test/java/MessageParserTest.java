@@ -55,4 +55,25 @@ public class MessageParserTest {
         assertEquals("room42", parts[3]);
         assertEquals("Hej", parts[4]);
     }
+
+    @Test
+    public void formatClientListFilesShouldProduceEmptyTargetAndPayload() {
+        String formatted = MessageParser.formatClientListFiles();
+        assertEquals("LISTFILES||", formatted);
+    }
+
+    @Test
+    public void formatClientGetFileShouldPlaceFileInTarget() {
+        String formatted = MessageParser.formatClientGetFile("readme.md");
+        assertEquals("GETFILE|readme.md|", formatted);
+    }
+
+    @Test
+    public void parseServerMessageShouldReturnTypeTargetAndPayload() {
+        String serverLine = "2026-09-15 09:00:00|FILELIST|server||file1.txt,file2.txt";
+        Message m = MessageParser.parseServerMessage(serverLine);
+        assertEquals("FILELIST", m.getType());
+        assertEquals("", m.getTarget());
+        assertEquals("file1.txt,file2.txt", m.getPayload());
+    }
 }

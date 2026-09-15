@@ -7,6 +7,8 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 
+import java.util.List;
+
 public class ClientHandler implements Runnable, MessageSender {
     private static final String MESSAGE_TYPE_LOGIN = "LOGIN";
     private static final String MESSAGE_TYPE_JOIN_ROOM = "JOIN_ROOM";
@@ -21,16 +23,18 @@ public class ClientHandler implements Runnable, MessageSender {
     private final Socket socket;
     private final ClientRegistry clientRegistry;
     private final ChatRoomManager chatRoomManager;
+    private final ServerFileRepository fileRepository;
     private final BufferedReader input;
     private final PrintWriter output;
     private String username;
     private String currentRoom;
     private boolean connected = true;
 
-    public ClientHandler(Socket socket, ClientRegistry clientRegistry, ChatRoomManager chatRoomManager) throws IOException {
+    public ClientHandler(Socket socket, ClientRegistry clientRegistry, ChatRoomManager chatRoomManager, ServerFileRepository fileRepository) throws IOException {
         this.socket = socket;
         this.clientRegistry = clientRegistry;
         this.chatRoomManager = chatRoomManager;
+        this.fileRepository = fileRepository;
         this.input = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
         this.output = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
     }
@@ -83,6 +87,9 @@ public class ClientHandler implements Runnable, MessageSender {
                 case MESSAGE_TYPE_QUIT:
                     sendServerMessage(MESSAGE_TYPE_OK, SERVER_USER, username == null ? "" : username, "Du er nu logget ud.");
                     disconnect();
+                    break;
+                case MessageParser.TYPE_LIST_FILES:
+                    handleListFiles();
                     break;
                 default:
                     sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, username == null ? "" : username, "Ukendt kommando: " + type);
@@ -192,6 +199,21 @@ public class ClientHandler implements Runnable, MessageSender {
 
         if (payload == null) payload = "";
         target.sendServerMessage(MESSAGE_TYPE_PRIVATE, username, recipient, payload);
+    }
+
+    private void handleListFiles() {
+        if (username == null) {
+            sendServerMessage(MESSAGE_TYPE_ERROR, SERVER_USER, "", "Du skal logge ind først.");
+            return;
+        }
+
+        try {
+            List<String> files = fileRepository.listFiles();
+            String payload = String.join(",", files);
+            sendServerMessage(MessageParser.TYPE_FILE_LIST, SERVER_USER, username, payload);
+        } catch (IOException e) {
+            sendServerMessage(MessageParser.TYPE_FILE_ERROR, SERVER_USER, username, "Kunne ikke liste filer: " + e.getMessage());
+        }
     }
 
     private void disconnect() {

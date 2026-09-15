@@ -46,13 +46,22 @@ public class ChatServer {
         }
 
         System.out.println("Starter ChatServer på port " + port);
+        // Create the shared file repository used for file transfer features
+        ServerFileRepository fileRepository;
+        try {
+            fileRepository = new ServerFileRepository(getSharedFilesDirectory());
+        } catch (IllegalArgumentException e) {
+            System.err.println("Kunne ikke initialisere filrepository: " + e.getMessage());
+            return;
+        }
+
         try (ServerSocket server = new ServerSocket(port)) {
             while (true) {
                 Socket clientSocket = server.accept();
                 System.out.println("Forbindelse accepteret fra " + clientSocket.getRemoteSocketAddress());
 
                 try {
-                    clientPool.submit(new ClientHandler(clientSocket, clientRegistry, chatRoomManager));
+                    clientPool.submit(new ClientHandler(clientSocket, clientRegistry, chatRoomManager, fileRepository));
                 } catch (IOException e) {
                     System.out.println("Kunne ikke starte ClientHandler: " + e.getMessage());
                     clientSocket.close();
