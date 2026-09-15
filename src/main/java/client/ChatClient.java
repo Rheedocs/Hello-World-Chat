@@ -57,7 +57,7 @@ public class ChatClient {
             Thread listener = new Thread(new ServerListener(serverInput, socket, connectionLost, serverMessages, loginPhase));
             listener.start();
 
-            System.out.println("Kommandoer: /w <bruger> <besked>, /join <rum>, /quit. Skriv bare almindelig tekst for at chatte i dit nuværende rum.");
+            printCommandHelp();
 
             BlockingQueue<String> inputQueue = new ArrayBlockingQueue<>(INPUT_QUEUE_SIZE);
             Thread inputThread = new Thread(() -> {
@@ -161,6 +161,10 @@ public class ChatClient {
         }
     }
 
+    private static void printCommandHelp() {
+        System.out.println("Kommandoer: /w <bruger> <besked>, /join <rum>, /list, /get <filnavn>, /quit, /help. Skriv bare almindelig tekst for at chatte i dit nuværende rum.");
+    }
+
     private static String parseSlashCommand(String line) {
         if (line == null) {
             return null;
@@ -218,6 +222,11 @@ public class ChatClient {
             }
 
             String trimmed = line.trim();
+            if ("/help".equals(trimmed)) {
+                printCommandHelp();
+                continue;
+            }
+
             String slashCommand = parseSlashCommand(trimmed);
             if (slashCommand != null) {
                 out.println(slashCommand);
