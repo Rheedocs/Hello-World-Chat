@@ -56,33 +56,47 @@ public class ServerListener implements Runnable {
     public void run() {
         try {
             while (true) {
-                String message = input.readLine();
+                String message = readNextServerMessage();
                 if (message == null) {
-                    connectionLost.set(true);
-                    closeSocket();
+                    handleSocketClosed();
                     break;
                 }
                 if (serverMessages != null && loginPhase.get()) {
-                    serverMessages.put(message);
+                    handleLoginQueue(message);
                     continue;
                 }
 
-                // Try to parse server message and handle special file-related messages
-                try {
-                    java.util.concurrent.atomic.AtomicReference<String> display = new java.util.concurrent.atomic.AtomicReference<>();
-                    display.set(processServerMessage(message));
-                    System.out.println(display.get());
-                } catch (Exception e) {
-                    // Fallback to simple display on any parse/handling error
-                    System.out.println(formatForDisplay(message));
-                }
+                // Viser beskeden og håndterer filrelaterede beskeder særskilt
+                displayIncomingMessage(message);
             }
         } catch (IOException e) {
-            connectionLost.set(true);
-            closeSocket();
+            handleSocketClosed();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    private String readNextServerMessage() throws IOException {
+        return input.readLine();
+    }
+
+    private void handleLoginQueue(String message) throws InterruptedException {
+        serverMessages.put(message);
+    }
+
+    private void displayIncomingMessage(String message) {
+        try {
+            // Vi parser den samme serverbesked som før for at håndtere FILELIST/FILEDATA/FILEERROR.
+            System.out.println(processServerMessage(message));
+        } catch (Exception e) {
+            // Falder tilbage til simpel visning, hvis parsing eller håndtering fejler
+            System.out.println(formatForDisplay(message));
+        }
+    }
+
+    private void handleSocketClosed() {
+        connectionLost.set(true);
+        closeSocket();
     }
 
     private String processServerMessage(String rawMessage) throws IOException {
@@ -90,10 +104,10 @@ public class ServerListener implements Runnable {
             return "";
         }
 
-        // Parse into server message components
+        // Opdeler beskeden i protokolfelter
         var msg = MessageParser.parseServerMessage(rawMessage);
         String type = msg.getType().toUpperCase();
-        String sender = rawMessage.split("\\|", 5)[2]; // keep original sender for display
+        String sender = rawMessage.split("\\|", 5)[2]; // bevarer den oprindelige afsender til visning
         String payload = msg.getPayload();
 
         switch (type) {
@@ -101,11 +115,11 @@ public class ServerListener implements Runnable {
                 if (payload == null || payload.isBlank()) {
                     return "[Info]: Ingen filer på serveren.";
                 }
-                return "Filer på serveren: " + payload.replace(',', ',');
+                return "Filer på serveren: " + payload.replace(",", ", ");
             case "FILEERROR":
                 return "[Filfejl fra " + sender + "]: " + payload;
             case "FILEDATA":
-                // Expect payload format: filename|<base64>
+                // Forventet payload: filnavn|<base64>
                 String[] parts = payload.split("\\|", 2);
                 if (parts.length < 2) {
                     return "[Fejl]: Ugyldigt FILEDATA-payload.";
